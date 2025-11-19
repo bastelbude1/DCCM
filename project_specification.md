@@ -294,9 +294,25 @@ The system must maintain a complete audit trail for compliance and troubleshooti
   * Verify valid JSON or YAML syntax
   * Check that all schema keywords are recognized (`min`, `max`, `regex`, `options`, `lookup_file`, `separator`, `multi_select`, etc.)
   * Validate that `lookup_file` references point to existing, readable files
-  * Validate that `lookup_file` paths are absolute and do not contain path traversal sequences (e.g., `..`)
+  * Validate that `lookup_file` paths conform to the lookup file constraints (see below)
   * Display **all validation errors** to the user in a clear, actionable format
   * Reject invalid templates and prevent form generation until errors are resolved
+* **Lookup File Constraints:**
+  * **Location Requirement:** All `lookup_file` references must be located in a specific subdirectory of the Management Volume:
+    - Required path prefix: `/mnt/dccm/mgmt/lookups/`
+    - Example valid path: `/mnt/dccm/mgmt/lookups/support_groups.txt`
+    - Example invalid path: `/etc/config/support_groups.txt` (rejected - not in lookups directory)
+  * **Security:**
+    - The Management Application must have **Read** access to files in `/mnt/dccm/mgmt/lookups/`
+    - The Retrieval Web Server must **NOT** have access to these files (Management Volume is not accessible to web server)
+  * **Path Validation:**
+    - Reject paths containing `..` (path traversal)
+    - Reject relative paths (must be absolute)
+    - Reject paths outside `/mnt/dccm/mgmt/lookups/` directory
+  * **File Permissions:**
+    - Files must be readable by the Management Application process user (e.g., `dccm-app`)
+    - Recommended permissions: `644` (owner: root, group: dccm-app)
+    - Files owned by root or system administrator, not modifiable by application
 * **Error Handling During Template Validation:**
   * **Invalid JSON/YAML syntax**: Display syntax error with line number
   * **Unrecognized schema keyword**: List all unrecognized keywords
@@ -562,7 +578,7 @@ custom_config:
 file_instance:
   label: "Instance Selection"
   description: "Select the target instance from available instances"
-  lookup_file: /etc/config/available_instances.txt
+  lookup_file: /mnt/dccm/mgmt/lookups/available_instances.txt
   # File contains hundreds of lines - automatically rendered as SEARCHABLE dropdown
   # User can type to filter/search through options
 
@@ -572,7 +588,7 @@ file_instance:
 support_teams:
   label: "Support Teams"
   description: "Select one or more support teams for this configuration"
-  lookup_file: /etc/config/support_groups.txt
+  lookup_file: /mnt/dccm/mgmt/lookups/support_groups.txt
   separator: ";"
   column: 0  # Use first column (SU_NAME), column index is 0-based
   multi_select: true
@@ -1257,7 +1273,7 @@ When a user tries to open a locked configuration:
 
 #### 10.3.2 External Dependency Failures (lookup_file)
 
-**Scenario:** A template references `lookup_file: /etc/config/instances.txt` but the file is missing or unreadable.
+**Scenario:** A template references `lookup_file: /mnt/dccm/mgmt/lookups/instances.txt` but the file is missing or unreadable.
 
 **Requirements:**
 - Detect during form rendering (Step 2 of assembly)
