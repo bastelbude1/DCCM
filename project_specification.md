@@ -1444,7 +1444,26 @@ support_teams:
 - No implementation bloat
 - Works for 80% of use cases
 
-#### 6.2.2 Recommended Naming Conventions
+#### 6.2.2 Delimiter Convention for Grouped Parameters
+
+**IMPORTANT: Use Double Colon `::` as the Delimiter**
+
+When creating grouped parameters, **always use double colon `::` as the delimiter** between the group identifier (prefix) and the field name.
+
+**Why Double Colon?**
+- ✅ **Explicit grouping signal** - When you see `::`, you immediately know it's a grouped parameter
+- ✅ **Unambiguous parsing** - Clear boundary between prefix and field name
+- ✅ **Preserves underscores** - Single underscores remain available for normal field names (e.g., `max_retries`, `db_host`)
+- ✅ **Visual distinction** - Easy to distinguish `rule1::name` (grouped) from `database_host` (standalone)
+
+**Comparison:**
+```yaml
+# ❌ UNCLEAR: Is this "primary" + "db_host" or "primary_db" + "host"?
+primary_db_host:
+
+# ✅ CLEAR: This is the "host" field of the "primary_db" group
+primary_db::host:
+```
 
 **Pattern 1: Numbered Groups (Fixed Count)**
 
@@ -1453,57 +1472,57 @@ Use when you have a **known, fixed number** of groups:
 **Template Example - Firewall Rules:**
 ```yaml
 # Rule 1
-rule1_name:
+rule1::name:
   label: "Rule 1: Name"
   description: "Descriptive name for this firewall rule"
 
-rule1_source:
+rule1::source:
   label: "Rule 1: Source IP/CIDR"
   regex: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(/\\d{1,2})?$"
 
-rule1_port:
+rule1::port:
   label: "Rule 1: Port"
   type: integer
   min: 1
   max: 65535
 
-rule1_action:
+rule1::action:
   label: "Rule 1: Action"
   options: ["ALLOW", "DENY"]
 
 # Rule 2
-rule2_name:
+rule2::name:
   label: "Rule 2: Name"
 
-rule2_source:
+rule2::source:
   label: "Rule 2: Source IP/CIDR"
   regex: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(/\\d{1,2})?$"
 
-rule2_port:
+rule2::port:
   label: "Rule 2: Port"
   type: integer
   min: 1
   max: 65535
 
-rule2_action:
+rule2::action:
   label: "Rule 2: Action"
   options: ["ALLOW", "DENY"]
 
 # Rule 3
-rule3_name:
+rule3::name:
   label: "Rule 3: Name"
 
-rule3_source:
+rule3::source:
   label: "Rule 3: Source IP/CIDR"
   regex: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(/\\d{1,2})?$"
 
-rule3_port:
+rule3::port:
   label: "Rule 3: Port"
   type: integer
   min: 1
   max: 65535
 
-rule3_action:
+rule3::action:
   label: "Rule 3: Action"
   options: ["ALLOW", "DENY"]
 ```
@@ -1511,18 +1530,18 @@ rule3_action:
 **Output Configuration:**
 ```json
 {
-  "rule1_name": "Allow HTTPS",
-  "rule1_source": "10.0.0.0/8",
-  "rule1_port": 443,
-  "rule1_action": "ALLOW",
-  "rule2_name": "Block SSH from Internet",
-  "rule2_source": "0.0.0.0/0",
-  "rule2_port": 22,
-  "rule2_action": "DENY",
-  "rule3_name": "Allow HTTP from VPN",
-  "rule3_source": "192.168.0.0/16",
-  "rule3_port": 80,
-  "rule3_action": "ALLOW"
+  "rule1::name": "Allow HTTPS",
+  "rule1::source": "10.0.0.0/8",
+  "rule1::port": 443,
+  "rule1::action": "ALLOW",
+  "rule2::name": "Block SSH from Internet",
+  "rule2::source": "0.0.0.0/0",
+  "rule2::port": 22,
+  "rule2::action": "DENY",
+  "rule3::name": "Allow HTTP from VPN",
+  "rule3::source": "192.168.0.0/16",
+  "rule3::port": 80,
+  "rule3::action": "ALLOW"
 }
 ```
 
@@ -1532,52 +1551,52 @@ Use when groups have **distinct purposes**:
 
 **Template Example - Database Connections:**
 ```yaml
-primary_db_host:
+primary_db::host:
   label: "Primary Database: Host"
 
-primary_db_port:
+primary_db::port:
   label: "Primary Database: Port"
   type: integer
   value: 5432
 
-primary_db_name:
+primary_db::name:
   label: "Primary Database: Database Name"
 
-secondary_db_host:
+secondary_db::host:
   label: "Secondary Database: Host"
 
-secondary_db_port:
+secondary_db::port:
   label: "Secondary Database: Port"
   type: integer
   value: 5432
 
-secondary_db_name:
+secondary_db::name:
   label: "Secondary Database: Database Name"
 
-failover_db_host:
+failover_db::host:
   label: "Failover Database: Host"
 
-failover_db_port:
+failover_db::port:
   label: "Failover Database: Port"
   type: integer
   value: 5432
 
-failover_db_name:
+failover_db::name:
   label: "Failover Database: Database Name"
 ```
 
 **Output Configuration:**
 ```json
 {
-  "primary_db_host": "db-primary.example.com",
-  "primary_db_port": 5432,
-  "primary_db_name": "production",
-  "secondary_db_host": "db-secondary.example.com",
-  "secondary_db_port": 5432,
-  "secondary_db_name": "production",
-  "failover_db_host": "db-failover.example.com",
-  "failover_db_port": 5432,
-  "failover_db_name": "production"
+  "primary_db::host": "db-primary.example.com",
+  "primary_db::port": 5432,
+  "primary_db::name": "production",
+  "secondary_db::host": "db-secondary.example.com",
+  "secondary_db::port": 5432,
+  "secondary_db::name": "production",
+  "failover_db::host": "db-failover.example.com",
+  "failover_db::port": 5432,
+  "failover_db::name": "production"
 }
 ```
 
@@ -1586,30 +1605,30 @@ failover_db_name:
 Use for **hierarchical-like organization** while staying flat:
 
 ```yaml
-app_service_name:
+app::service_name:
   label: "Application: Service Name"
 
-app_service_port:
+app::service_port:
   label: "Application: Service Port"
   type: integer
 
-app_timeout_ms:
+app::timeout_ms:
   label: "Application: Timeout (ms)"
   type: integer
 
-logging_level:
+logging::level:
   label: "Logging: Level"
   options: ["DEBUG", "INFO", "WARN", "ERROR"]
 
-logging_max_size_mb:
+logging::max_size_mb:
   label: "Logging: Max File Size (MB)"
   type: integer
 
-monitoring_enabled:
+monitoring::enabled:
   label: "Monitoring: Enabled"
   type: boolean
 
-monitoring_endpoint:
+monitoring::endpoint:
   label: "Monitoring: Endpoint URL"
 ```
 
@@ -1625,7 +1644,7 @@ import json
 with open('/mnt/dccm/public/prod/firewall-rules.json') as f:
     config = json.load(f)
 
-# Parse grouped parameters using naming convention
+# Parse grouped parameters using double colon delimiter
 def parse_grouped_fields(config, pattern):
     """Parse fields matching pattern into grouped structure."""
     groups = {}
@@ -1642,8 +1661,8 @@ def parse_grouped_fields(config, pattern):
 
     return groups
 
-# Parse firewall rules
-rules = parse_grouped_fields(config, pattern=r'rule(\d+)_(\w+)')
+# Parse firewall rules using :: delimiter
+rules = parse_grouped_fields(config, pattern=r'rule(\d+)::(\w+)')
 
 # Result:
 # rules = {
@@ -1667,15 +1686,15 @@ for rule_id, rule in sorted(rules.items()):
 # Load config from DCCM
 CONFIG_FILE="/mnt/dccm/public/prod/database-connections.json"
 
-# Extract primary database settings
-PRIMARY_HOST=$(jq -r '.primary_db_host' "$CONFIG_FILE")
-PRIMARY_PORT=$(jq -r '.primary_db_port' "$CONFIG_FILE")
-PRIMARY_NAME=$(jq -r '.primary_db_name' "$CONFIG_FILE")
+# Extract primary database settings (using :: delimiter in field names)
+PRIMARY_HOST=$(jq -r '.["primary_db::host"]' "$CONFIG_FILE")
+PRIMARY_PORT=$(jq -r '.["primary_db::port"]' "$CONFIG_FILE")
+PRIMARY_NAME=$(jq -r '.["primary_db::name"]' "$CONFIG_FILE")
 
 # Extract secondary database settings
-SECONDARY_HOST=$(jq -r '.secondary_db_host' "$CONFIG_FILE")
-SECONDARY_PORT=$(jq -r '.secondary_db_port' "$CONFIG_FILE")
-SECONDARY_NAME=$(jq -r '.secondary_db_name' "$CONFIG_FILE")
+SECONDARY_HOST=$(jq -r '.["secondary_db::host"]' "$CONFIG_FILE")
+SECONDARY_PORT=$(jq -r '.["secondary_db::port"]' "$CONFIG_FILE")
+SECONDARY_NAME=$(jq -r '.["secondary_db::name"]' "$CONFIG_FILE")
 
 # Connect to primary, fallback to secondary
 if ! psql -h "$PRIMARY_HOST" -p "$PRIMARY_PORT" -d "$PRIMARY_NAME" -c "SELECT 1" > /dev/null 2>&1; then
