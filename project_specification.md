@@ -239,19 +239,22 @@ The system supports the following input field types, determined by template conf
 
 **Schema Keywords:**
 
-| Schema Key | Functionality / NiceGUI Component | Purpose |
-| :--- | :--- | :--- |
-| `type` | **Explicit Type Declaration** | Forces specific field type: `'text'`, `'number'`, `'boolean'`, `'textarea'`. Overrides type inference. |
-| `label` | **Form Field Label** | Human-readable label displayed in the form. If omitted, the field key name is used as the label. |
-| `description` | **Help Text** | Optional description/tooltip text displayed below or next to the field to guide users. |
-| `value` | **Default/Initial Value** | Initial value for the field. Used for type inference if `type` not specified. |
-| `multiline` | **Multi-line Text** | When `true`, renders a text area instead of single-line text input. |
-| `min` / `max` / `regex` | **Range & Pattern Checking** | Enforces strict data format and boundary rules. |
-| `options` | **Predefined Dropdown** | Renders dropdown from explicit list. Searchable if ≥ 10 items. |
-| `lookup_file` | **Searchable Dropdown** | Reads **external local .txt file** to populate searchable dropdown. Ideal for hundreds of choices. |
-| `separator` | **File Column Delimiter** | Used with `lookup_file`. Defines the delimiter character (e.g., `;`, `,`, `\t`). Must be used together with `column`. |
-| `column` | **Column Index** | Used with `lookup_file` and `separator`. Specifies which column to use for dropdown values (0-indexed). Default: `0` (first column). |
-| `multi_select` | **Enable Multi-Select** | Used with `lookup_file` or `options`. When `true`, allows selecting multiple values. |
+| Schema Key | Required? | Default Value | Functionality | Purpose |
+| :--- | :---: | :--- | :--- | :--- |
+| `type` | Optional | Inferred from `value` | **Explicit Type Declaration** | Forces specific field type: `'text'`, `'number'`, `'boolean'`, `'textarea'`. Overrides type inference. |
+| `label` | Optional | Field key name | **Form Field Label** | Human-readable label displayed in the form. |
+| `description` | Optional | None (no help text) | **Help Text** | Description/tooltip text displayed below or next to field. |
+| `value` | Optional | `""` (empty string) | **Default/Initial Value** | Initial value for the field. Used for type inference if `type` not specified. |
+| `multiline` | Optional | `false` | **Multi-line Text** | When `true`, renders a text area instead of single-line text input. |
+| `min` / `max` | Optional | None (no validation) | **Range Checking** | Enforces numeric boundaries. Only for number fields. |
+| `regex` | Optional | None (no validation) | **Pattern Checking** | Enforces regex pattern validation. Only for text fields. |
+| `options` | Optional | None | **Predefined Dropdown** | Renders dropdown from explicit list. Searchable if ≥ 10 items. |
+| `lookup_file` | Optional | None | **Searchable Dropdown** | Reads **external local .txt file** to populate searchable dropdown. Ideal for hundreds of choices. |
+| `separator` | Conditional* | None | **File Column Delimiter** | Defines delimiter character (e.g., `;`, `,`, `\t`). *Required if file has multiple columns. |
+| `column` | Optional | `0` (first column) | **Column Index** | Specifies which column to use for dropdown values (0-indexed). Used with `separator`. |
+| `multi_select` | Optional | `false` | **Enable Multi-Select** | When `true`, allows selecting multiple values with `lookup_file` or `options`. |
+
+**Note:** All keywords are optional. The absolute minimum valid field definition is just a field key with no keywords - it renders as a free text input.
 
 ---
 
@@ -277,14 +280,20 @@ The following example demonstrates the Dynamic Form Builder capabilities using a
 # FILE: my-service_prod_template.yaml
 
 # ----------------------------------------------------
-# 0. Default: Free Text (No Validation)
+# 0. Absolute Minimum - Just Field Key (Free Text)
+# ----------------------------------------------------
+service_name:
+  # No keywords at all - valid!
+  # Renders as: text input, label "service_name", no validation, default value ""
+
+# ----------------------------------------------------
+# 0b. Free Text with Custom Label
 # ----------------------------------------------------
 service_description:
   label: "Service Description"
   description: "Brief description of this service configuration"
   value: ""
-  # No validation keywords = free text input
-  # Field key: service_description, Form label: "Service Description"
+  # Free text input with better UX
 
 # ----------------------------------------------------
 # 1. Optional Type Inference & Range/Pattern Validation
