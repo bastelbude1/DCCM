@@ -47,9 +47,9 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
 
 | Role | Privilege Level | Granting Mechanism |
 | :--- | :--- | :--- |
-| **Owner** | **Update/Modify** | Automatically assigned to the initial uploader of the configuration. **Must be saved as metadata.** |
-| **Authorized User (Editor)** | **Update/Modify** | Granted via Owner delegation (Support Unit lookup or Manual List). |
-| **Config Administrator** | **Full Control (Update + Delete)** | Explicitly assigned role; required for **removal/deletion** of any configuration. |
+| **Owner** | **Full Template & Configuration Control** | Initial uploader is automatically assigned as Owner. **Additional Owners can be added** by existing Owners. Multiple Owners are supported. **Must be saved as metadata.** |
+| **Authorized User (Editor)** | **Update Configuration Values Only** | Granted via Owner delegation (Support Unit lookup or Manual List). Can modify configuration values through the form but **cannot upload or modify templates**. |
+| **Config Administrator** | **Full Control (Update + Delete)** | Explicitly assigned role; can delete any template or configuration. |
 
 ### 3.2 Template Upload & Validation
 
@@ -60,27 +60,26 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
   * Validate that `lookup_file` references point to existing, readable files
   * Display **all validation errors** to the user in a clear, actionable format
   * Reject invalid templates and prevent form generation until errors are resolved
-* **Template Naming & Collision Handling:** Templates are saved with a user-provided name.
+* **Template Naming & Collision Handling:** Templates are saved with a user-provided name. **The template name becomes the configuration filename.**
   * Maximum length: **50 characters**
   * Allowed characters: **Web-safe characters only** (alphanumeric, hyphens, underscores: `a-z`, `A-Z`, `0-9`, `-`, `_`)
   * No spaces or special characters that require URL encoding (avoids `%20` in curl requests)
   * The system must validate input and reject non-compliant names
   * If a template with the same name exists:
-    * **Owner or Config Administrator**: Can overwrite the existing template
+    * **Any Owner or Config Administrator**: Can overwrite the existing template
+    * **Authorized Users (Editors)**: Cannot upload or overwrite templates
     * **Others**: Must choose a different name
 
 ### 3.3 Configuration File Naming & Retrieval
 
-* **Configuration Naming:** After filling out the generated form, users save the validated configuration with a name.
-  * Maximum length: **50 characters**
-  * Allowed characters: **Web-safe characters only** (`a-z`, `A-Z`, `0-9`, `-`, `_`)
-  * No spaces or special characters requiring URL encoding
-  * The system must validate input and reject non-compliant names
+* **Configuration Naming:** The configuration filename is **derived from the template name** - users cannot choose a different name.
+  * When a template is uploaded with name `my-service`, all configurations generated from it will be named `my-service.[json|yaml]`
 * **File Format:** The user specifies the desired output format (JSON or YAML). The file extension is automatically added based on the selected format.
-* **Configuration Collision Handling:** If a configuration file with the same name exists:
-  * **Owner or Config Administrator**: Can overwrite the existing configuration
-  * **Authorized User (Editor)** who is not the Owner: Must choose a different name
-* **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[free-text-name].[json|yaml]`.
+* **Configuration Update Permissions:**
+  * **Owners**: Can update configuration values and modify the template
+  * **Authorized Users (Editors)**: Can update configuration values only (cannot modify template)
+  * **Config Administrator**: Full control over all configurations and templates
+* **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[template-name].[json|yaml]`.
 
 ---
 

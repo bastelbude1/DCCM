@@ -54,9 +54,9 @@ The form generation engine is the heart of DCCM. It uses recursive parsing to co
 
 Access control is based on `SSO_USERNAME` environment variable:
 
-- **Owner**: Automatically assigned to initial uploader (stored as metadata), can Update/Modify and delegate access
-- **Authorized User (Editor)**: Granted access via Owner delegation (Support Unit lookup or manual list), can Update/Modify
-- **Config Administrator**: Explicitly assigned role with full control including deletion
+- **Owner**: Initial uploader automatically assigned as Owner. **Multiple Owners supported** - existing Owners can add additional Owners. Full control over templates and configurations. Stored as metadata.
+- **Authorized User (Editor)**: Granted access via Owner delegation (Support Unit lookup or manual list). **Can only update configuration values** through forms, cannot upload or modify templates.
+- **Config Administrator**: Explicitly assigned role with full control including deletion of any template or configuration
 
 ### Template Upload & Validation
 
@@ -64,6 +64,7 @@ The system has two distinct workflows: template upload and configuration creatio
 
 **Template Upload Process:**
 - Users upload JSON or YAML template files that define the schema
+- **Template name becomes the configuration filename** (critical coupling)
 - System performs comprehensive validation before accepting:
   - Valid JSON/YAML syntax
   - All schema keywords recognized (`min`, `max`, `regex`, `options`, `lookup_file`)
@@ -72,24 +73,23 @@ The system has two distinct workflows: template upload and configuration creatio
   - Reject invalid templates until errors resolved
 - Template naming follows same constraints as configurations (50 char, web-safe)
 - Template collision handling:
-  - Owner or Config Administrator: Can overwrite existing template
+  - Any Owner or Config Administrator: Can overwrite existing template
+  - Authorized Users (Editors): Cannot upload or overwrite templates at all
   - Others: Must choose different name
 
 ### Configuration Naming & Collision Handling
 
 **Configuration Creation Process:**
 - After form is generated from template, users fill it out and save validated configuration
-- **Naming constraints:**
-  - Maximum 50 characters
-  - Web-safe characters only: `a-z`, `A-Z`, `0-9`, `-`, `_`
-  - No spaces or characters requiring URL encoding
-  - System must validate and reject non-compliant names
+- **Configuration filename is derived from template name** - no separate naming step
+  - Template `my-service` generates configuration `my-service.[json|yaml]`
 - Users select the desired output format (JSON or YAML)
 - File extension is automatically added based on selected format
-- Configuration collision handling:
-  - Owner or Config Administrator: Can overwrite existing configuration
-  - Authorized User (Editor) who is not Owner: Must choose different name
-- Final files are served at predictable URLs: `http://[config-host]/[free-text-name].[json|yaml]`
+- Configuration update permissions:
+  - Owners: Can update configuration values and modify template
+  - Authorized Users (Editors): Can update configuration values only
+  - Config Administrator: Full control
+- Final files are served at predictable URLs: `http://[config-host]/[template-name].[json|yaml]`
 
 ## Template Structure Example
 
