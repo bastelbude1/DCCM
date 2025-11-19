@@ -29,6 +29,15 @@
    - 5.3 [Configuration File Naming & Retrieval](#53-configuration-file-naming--retrieval)
    - 5.4 [User Operations](#54-user-operations)
    - 5.5 [Error Handling During Configuration Creation/Editing](#55-error-handling-during-configuration-creationediting)
+   - 5.6 [Configuration Drift Detection & Invalid Value Handling](#56-configuration-drift-detection--invalid-value-handling)
+     - 5.6.1 [Immediate Feedback at Edit Time](#561-immediate-feedback-at-edit-time)
+     - 5.6.2 [Background Validation Service](#562-background-validation-service)
+     - 5.6.3 [Persistent Failure Tracking](#563-persistent-failure-tracking)
+     - 5.6.4 [Owner Notification Email](#564-owner-notification-email)
+     - 5.6.5 [Config Administrator Impact Analysis](#565-config-administrator-impact-analysis)
+     - 5.6.6 [Validation History & Audit Trail](#566-validation-history--audit-trail)
+     - 5.6.7 [Config Administrator Escalation](#567-config-administrator-escalation)
+     - 5.6.8 [Implementation Considerations](#568-implementation-considerations)
 6. [Implementation Logic: The Dynamic Form Builder](#6-implementation-logic-the-dynamic-form-builder)
    - 6.1 [Form Field Types & Validation Strategy](#61-form-field-types--validation-strategy)
 7. [Technology Stack](#7-technology-stack)
@@ -533,6 +542,325 @@ The UI must support these distinct operations:
 * **Validation failure**: Display specific field validation errors (e.g., "service_timeout_ms must be between 1000 and 15000")
 * **Permission denied**: If user lacks permission to update configuration, display clear error message indicating they need Owner or Editor access
 * **No template exists**: If user tries to create/edit configuration but template was deleted, display error and prevent operation
+
+### 5.6 Configuration Drift Detection & Invalid Value Handling
+
+**Problem:** Configuration values can become invalid over time due to changes in lookup files, validation scripts, or template updates. For example, a support team is renamed, a budget code expires, or a user leaves the company.
+
+**Solution:** Multi-layered drift detection and notification system that distinguishes between legitimate failures and transient issues.
+
+#### 5.6.1 Immediate Feedback at Edit Time
+
+When an Owner or Editor opens a configuration with now-invalid values:
+
+**UI Behavior:**
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ Edit Configuration: my-service                   User: alice.smith │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  ⚠ VALIDATION NOTICE                                               │
+│  1 field contains a value that is no longer valid according to     │
+│  the current template. You must update it before saving.           │
+│  [View Details]                                                    │
+│                                                                    │
+│  ────────────────────────────────────────────────────────────────  │
+│                                                                    │
+│  Support Team                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ ❌ Current value: "DevOps-Legacy" (NO LONGER AVAILABLE)      │  │
+│  │                                                              │  │
+│  │ Please select new value:                                     │  │
+│  │ ● DevOps-Platform                                            │  │
+│  │ ○ DevOps-Infrastructure                                      │  │
+│  │ ○ DevOps-Security                                            │  │
+│  │                                                              │  │
+│  │ 💡 Hint: "DevOps-Platform" is the successor to               │  │
+│  │    "DevOps-Legacy" (renamed on 2025-10-15)                   │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  Service Timeout (ms)                                              │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ 5000                                                         │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  [Cancel]                                          [Save]          │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Requirements:**
+- Clearly indicate which field(s) have invalid values
+- Show current invalid value vs available options
+- Display migration hint if Config Admin provided one (e.g., "DevOps-Legacy → DevOps-Platform")
+- Prevent saving until all invalid fields are updated
+- Load the configuration in edit mode (don't block access)
+- Other valid fields remain editable
+
+#### 5.6.2 Background Validation Service
+
+**Purpose:** Proactively detect configurations with invalid values before owners try to edit them.
+
+**Implementation:**
+- Run daily validation scan (recommended: 02:00 AM)
+- Validate ALL configurations against their current templates
+- Track validation history to distinguish persistent failures from transient issues
+- Send notifications only for persistent failures (3+ consecutive days)
+
+**Validation Result Types:**
+
+| Status | Meaning | Action |
+| :--- | :--- | :--- |
+| `success` | Value passes validation | No action |
+| `failed` | Value legitimately invalid (e.g., not in lookup list, script returns non-zero) | Track failure, notify if persistent |
+| `unavailable` | Validation cannot run (script down, file missing, timeout) | Log issue, do NOT count as failure, do NOT notify owners |
+
+**Critical Distinction:**
+- **Failed validation** = Data problem (value no longer valid) → Notify owner
+- **Unavailable validation** = System problem (script timeout, file missing) → Alert admin, NOT owner
+
+#### 5.6.3 Persistent Failure Tracking
+
+**Algorithm:**
+```
+For each configuration:
+  1. Run validation against current template
+  2. If validation returns 'unavailable':
+     - Log to audit trail: "Validation unavailable for config X, field Y"
+     - Do NOT increment failure counter
+     - Do NOT send notification
+  3. If validation returns 'failed':
+     - Record failure with timestamp and failed fields
+     - Check consecutive days failed
+     - If >= 3 consecutive days AND no 'unavailable' in last 3 days:
+       - Send notification if not already notified this week
+  4. If validation returns 'success':
+     - Reset failure counter
+```
+
+**False Positive Prevention:**
+- **3-day threshold:** Prevents alerts for temporary issues
+- **Unavailable reset:** If validation was unavailable recently, restart the 3-day clock
+- **Weekly frequency:** After initial alert, notify weekly (not daily)
+- **Escalation:** After 4 notifications (1 month), escalate to Config Administrator
+
+#### 5.6.4 Owner Notification Email
+
+**Trigger Conditions:**
+- Configuration has failed validation for 3+ consecutive days
+- No 'unavailable' status in last 3 days (ensures legitimate failure)
+- At least 7 days since last notification (weekly frequency)
+- Fewer than 4 notifications already sent (then escalate to admin)
+
+**Email Template:**
+```
+Subject: [DCCM] Action Required: Configuration "my-service" has invalid values
+
+Hi Alice Smith, Charlie Admin (Owners of "my-service"),
+
+Your configuration "my-service" has values that are no longer valid
+according to the current template. This has been detected for 3 consecutive days.
+
+INVALID FIELDS:
+┌────────────────────────────────────────────────────────────────┐
+│ Field: support_team                                            │
+│ Current Value: "DevOps-Legacy"                                 │
+│ Issue: Value not in approved list                              │
+│ Available Options: DevOps-Platform, DevOps-Infrastructure, ... │
+│                                                                │
+│ Suggested Fix: Update to "DevOps-Platform"                     │
+│ (DevOps-Legacy was renamed to DevOps-Platform on 2025-10-15)   │
+└────────────────────────────────────────────────────────────────┘
+
+NEXT STEPS:
+1. Click here to edit configuration: https://dccm.company.com/edit/my-service
+2. Update the invalid field(s)
+3. Save the configuration
+
+This notification will repeat weekly until resolved.
+
+Last successful validation: 2025-11-17 (4 days ago)
+Configuration last modified: 2025-10-01 by alice.smith
+
+---
+Questions? Contact Config Administrators or reply to this email.
+```
+
+**Notification Frequency Policy:**
+- **Initial delay:** 3 days of consecutive failure
+- **Frequency:** Weekly after initial notification
+- **Maximum:** 4 notifications (4 weeks total)
+- **Escalation:** After 4 notifications, alert Config Administrator about stale configuration
+
+#### 5.6.5 Config Administrator Impact Analysis
+
+Before removing entries from lookup files or changing validation rules, show impact:
+
+**Lookup File Editor UI:**
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ Lookup File Editor: support_teams                                  │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  Current Values:                                                   │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ ✓ DevOps-Platform               (Used in 45 configs)         │  │
+│  │ ✓ DevOps-Infrastructure         (Used in 23 configs)         │  │
+│  │ ⚠ DevOps-Legacy                 (Used in 12 configs)         │  │
+│  │                                                              │  │
+│  │   ⚠ WARNING: Removing "DevOps-Legacy" will cause           │  │
+│  │      validation failures in 12 active configurations.       │  │
+│  │                                                              │  │
+│  │   Affected configs:                                          │  │
+│  │   - my-service (alice.smith)                                 │  │
+│  │   - api-gateway (bob.jones)                                  │  │
+│  │   - payment-processor (charlie.admin)                        │  │
+│  │   ... and 9 more                                             │  │
+│  │                                                              │  │
+│  │   Migration Hint (shown to owners):                          │  │
+│  │   ┌────────────────────────────────────────────────────────┐ │  │
+│  │   │ "DevOps-Legacy" was renamed to "DevOps-Platform"       │ │  │
+│  │   │ on 2025-10-15                                          │ │  │
+│  │   └────────────────────────────────────────────────────────┘ │  │
+│  │                                                              │  │
+│  │   [✓] Notify all affected owners before removal             │  │
+│  │                                                              │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  [Cancel]                           [Remove with Notification]     │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Requirements:**
+- Before removing lookup value, scan all configs using that lookup
+- Show count of affected configurations
+- List affected config names and owners
+- Allow admin to add migration hint that will be shown to owners
+- Send immediate notification to affected owners (don't wait 3 days)
+
+**Pre-removal Notification Email:**
+```
+Subject: [DCCM] Configuration Update Required: "DevOps-Legacy" being removed
+
+Hi Alice Smith,
+
+The Config Administrator is removing "DevOps-Legacy" from the support_teams
+lookup list. Your configuration "my-service" currently uses this value.
+
+IMPACT:
+- Your configuration will become invalid after 2025-11-25 (7 days)
+- You will not be able to edit it until you update the support_team field
+
+RECOMMENDED ACTION:
+Update "DevOps-Legacy" to "DevOps-Platform" (renamed on 2025-10-15)
+
+Click here to edit now: https://dccm.company.com/edit/my-service
+
+Questions? Reply to this email or contact the Config Administrator.
+```
+
+#### 5.6.6 Validation History & Audit Trail
+
+**Storage Requirements:**
+- Store validation results in Audit Volume: `/mnt/dccm/audit/validation_history/`
+- Track for each configuration:
+  - Validation timestamp
+  - Validation status (success, failed, unavailable)
+  - Failed fields and reasons
+  - Notification sent (yes/no, timestamp)
+
+**Log Entry Format:**
+```json
+{
+  "timestamp": "2025-11-20T02:00:15Z",
+  "config_name": "my-service",
+  "validation_status": "failed",
+  "failed_fields": [
+    {
+      "field": "support_team",
+      "current_value": "DevOps-Legacy",
+      "reason": "Value not in approved list",
+      "validation_type": "lookup_file",
+      "lookup_keyword": "support_teams"
+    }
+  ],
+  "notification_sent": false,
+  "consecutive_failures": 1
+}
+```
+
+#### 5.6.7 Config Administrator Escalation
+
+After 4 weeks of notifications without resolution, escalate to Config Administrator:
+
+**Escalation Email:**
+```
+Subject: [DCCM Admin] Stale Configuration: "my-service" (invalid for 28 days)
+
+Configuration "my-service" has had invalid values for 28 days despite
+4 owner notifications.
+
+DETAILS:
+- Owners: alice.smith, charlie.admin
+- Invalid Field: support_team
+- Current Value: "DevOps-Legacy" (not in approved list)
+- Last Modified: 2025-10-01 by alice.smith
+- First Detected: 2025-10-30
+- Notifications Sent: 4 (last: 2025-11-24)
+
+RECOMMENDED ACTIONS:
+1. Contact owners directly to resolve
+2. If configuration is no longer used, delete it
+3. If value should be re-added to lookup, update lookup file
+4. If urgent, fix configuration on behalf of owners (logged in audit trail)
+
+View configuration: https://dccm.company.com/admin/view/my-service
+Validation history: https://dccm.company.com/admin/audit/my-service
+```
+
+**Admin Actions:**
+- View configuration (read-only or editable by admin)
+- Delete configuration if abandoned
+- Force-fix configuration (logged as "Fixed by admin on behalf of owner")
+- Re-add value to lookup if removal was premature
+
+#### 5.6.8 Implementation Considerations
+
+**Validation Script Timeouts:**
+- If validation script times out, mark as 'unavailable' (not 'failed')
+- Log timeout to audit trail for admin troubleshooting
+- Do not notify owners about script timeouts
+- Alert Config Administrator if same script times out repeatedly
+
+**Lookup File Missing:**
+- If lookup file is temporarily missing, mark as 'unavailable'
+- Do not notify owners
+- Alert Config Administrator immediately
+
+**Performance:**
+- Background validation should run during low-usage hours (02:00 AM recommended)
+- Batch validation requests to avoid overwhelming external systems
+- Rate-limit validation script calls (e.g., max 10/second for phone script)
+- Cache lookup file contents for duration of validation run
+
+**Migration Hints Storage:**
+When Config Administrator removes a lookup value, store migration hint in metadata:
+```json
+{
+  "lookup_keyword": "support_teams",
+  "deprecated_values": {
+    "DevOps-Legacy": {
+      "removed_date": "2025-11-25",
+      "removed_by": "admin.user",
+      "migration_hint": "DevOps-Legacy was renamed to DevOps-Platform on 2025-10-15",
+      "suggested_replacement": "DevOps-Platform"
+    }
+  }
+}
+```
+
+This hint is displayed to owners when they encounter the invalid value.
 
 ---
 
