@@ -394,13 +394,36 @@ The system supports the following input field types, determined by template conf
 | **Multi-Select** | `multi_select: true` with `options` or `lookup_file` | Multi-select dropdown | Multiple teams, tags |
 | **Checkbox** | `type: 'boolean'` | Checkbox | Enable/disable feature flags |
 
-**Field Type Selection Logic:**
+**Field Rendering Logic:**
+
 1. **Explicit type**: If `type` keyword is present, use it (e.g., `type: 'boolean'`)
 2. **Type inference**: Infer from `value` (string → text, number → number input, boolean → checkbox)
 3. **Dropdown mode**: If `options` or `lookup_file` present, render as dropdown
-   - If `options` has ≥ 10 items OR `lookup_file` is used → **searchable dropdown**
-   - If `options` has < 10 items → **standard dropdown**
-4. **Default**: Text input
+   - **Searchable Dropdown:** Renders if `options` count is **≥ 10** OR if `lookup_file` is used
+   - **Standard Dropdown:** Renders if `options` count is **< 10** (9 items or fewer)
+4. **Multi-Select mode**: If `multi_select: true` is set:
+   - Allows selecting multiple values from dropdown
+   - Output must be an **Array of Strings** in the configuration file
+5. **Default**: Text input
+
+**Multi-Select Output Format:**
+
+When `multi_select: true` is used, the saved configuration must output an array:
+
+*JSON Example:*
+```json
+{
+  "support_teams": ["IT-Support", "DevOps-Team", "QA-Team"]
+}
+```
+
+*YAML Example:*
+```yaml
+support_teams:
+  - IT-Support
+  - DevOps-Team
+  - QA-Team
+```
 
 **Schema Keywords:**
 
@@ -582,7 +605,9 @@ Once the user fills out the generated form and saves it, the DCCM writes a clean
   "service_timeout_ms": 5000,
   "debug_log_level": "WARN",
   "region_deployment": "EU-CENTRAL-1",
-  "file_instance": "instance-prod-01"
+  "file_instance": "instance-prod-01",
+  "support_teams": ["IT-Support", "DevOps-Team"],
+  "enable_debug_mode": true
 }
 ```
 
@@ -593,7 +618,16 @@ service_timeout_ms: 5000
 debug_log_level: WARN
 region_deployment: EU-CENTRAL-1
 file_instance: instance-prod-01
+support_teams:
+  - IT-Support
+  - DevOps-Team
+enable_debug_mode: true
 ```
+
+**Note on Multi-Select Fields:**
+- Fields with `multi_select: true` (like `support_teams`) are **always** output as arrays
+- Even if only one value is selected, it must be an array: `["IT-Support"]`
+- Empty selection results in empty array: `[]`
 
 **Note:** Owner and access control metadata (such as Owner list, delegated Editors) are stored separately from the configuration output and are not included in the files served to consuming applications.
 
