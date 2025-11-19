@@ -48,6 +48,10 @@
     - 10.2 [The 4-Week Implementation Plan](#102-the-4-week-implementation-plan)
     - 10.3 [Why This Fits in 4 Weeks (The Accelerators)](#103-why-this-fits-in-4-weeks-the-accelerators)
     - 10.4 [Risk Factors (Where the Timeline Will Slip)](#104-risk-factors-where-the-timeline-will-slip)
+11. [Critical Implementation Considerations](#11-critical-implementation-considerations)
+    - 11.1 [The Three-Layer Assembly Process](#111-the-three-layer-assembly-process)
+    - 11.2 [Concurrency & Race Conditions](#112-concurrency--race-conditions)
+    - 11.3 [Additional Implementation Considerations](#113-additional-implementation-considerations)
 
 ---
 
@@ -938,3 +942,332 @@ If the developer spends time on these "traps," 4 weeks will become 8:
 1. **"Perfect" Diffing:** Building a UI that shows a visual *diff* (Red/Green lines) between versions is complex. **MVP Mitigation:** Just show the "Before" and "After" JSON text side-by-side.
 2. **Complex File Locking:** Trying to build a perfect database-grade locking mechanism on a file system. **MVP Mitigation:** Use a simple OS-level file lock or the "Last Write Wins" warning.
 3. **Frontend Perfectionism:** Trying to make NiceGUI look exactly like a custom React app. **MVP Mitigation:** Accept the standard Material Design look that NiceGUI provides out of the box.
+
+---
+
+## 11. Critical Implementation Considerations
+
+### 11.1 The Three-Layer Assembly Process
+
+The DCCM application uses a **three-file merge strategy** to render the configuration edit screen. Understanding this assembly process is critical for correct implementation.
+
+When a user visits `/edit/my-service`, the system reads and merges three distinct files from disk:
+
+| Input File | Role | UI Analogy | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Template** (`.yaml`/`.json`) | **The Architect** | Builds the walls, windows, and doors | Defines **structure** and validation rules |
+| **Config** (`.json`/`.yaml`) | **The Decorator** | Paints the walls and places the furniture | Provides **data values** for form fields |
+| **Metadata** (`.meta.json`) | **The Security Guard** | Decides who gets the keys | Controls **access** and permissions |
+
+#### 11.1.1 Layer 1: Template → Builds the Structure
+
+**File:** `management_fs/my-service.yaml`
+
+**Purpose:** Defines what UI components to create and their validation rules.
+
+**Example Input:**
+```yaml
+service_timeout:
+  type: number
+  min: 1000
+  max: 15000
+  label: "Service Timeout (ms)"
+```
+
+**UI Effect:**
+- System creates a Number Input field
+- Sets validation: must be between 1000-15000
+- Displays label "Service Timeout (ms)"
+
+**Without this file:** The screen is blank - no form fields exist.
+
+#### 11.1.2 Layer 2: Config → Fills the Data
+
+**File:** `retrieval_fs/my-service.json`
+
+**Purpose:** Provides the current values to pre-fill into form fields.
+
+**Example Input:**
+```json
+{
+  "service_timeout": 5000
+}
+```
+
+**UI Effect:**
+- The Number Input field (created by Layer 1) is pre-filled with value `5000`
+
+**Without this file:** Form fields are empty (or show default values from template).
+
+#### 11.1.3 Layer 3: Metadata → Controls State & Access
+
+**File:** `management_fs/my-service.meta.json`
+
+**Purpose:** Determines what the user can do with the form.
+
+**Example Input:**
+```json
+{
+  "owners": ["alice"],
+  "editors": ["bob"]
+}
+```
+
+**UI Effect based on SSO_USERNAME:**
+- **If user is Alice (Owner):**
+  - All inputs are editable
+  - "Save" button is visible and enabled
+  - "Delete" button is visible
+  - "Manage Access" button is visible
+- **If user is Bob (Editor):**
+  - All inputs are editable
+  - "Save" button is visible and enabled
+  - "Delete" button is hidden
+  - "Manage Access" button is hidden
+- **If user is Eve (No access):**
+  - Show "Access Denied" error page OR
+  - Show read-only view (inputs grayed out, no save button)
+
+**Without this file:** System cannot determine permissions - should show error.
+
+#### 11.1.4 The Assembly Algorithm
+
+When a user opens `/edit/my-service`, the backend executes this sequence:
+
+**Step 1: Load Metadata & Check Permissions**
+```python
+# Load management_fs/my-service.meta.json
+metadata = load_metadata("my-service")
+
+# Check if user has access
+user = os.environ["SSO_USERNAME"]
+if user not in (metadata["owners"] + metadata["editors"]):
+    return "Access Denied"
+
+# Set permission flags
+is_owner = user in metadata["owners"]
+can_delete = is_owner
+can_manage_access = is_owner
+```
+
+**Step 2: Load Template & Build Form Structure**
+```python
+# Load management_fs/my-service.yaml
+template = load_template("my-service")
+
+# Create UI elements
+form_fields = {}
+for field_key, field_schema in template.items():
+    ui_element = create_ui_element(field_schema)  # Creates Number, Text, Dropdown, etc.
+    form_fields[field_key] = ui_element
+```
+
+**Step 3: Load Config & Populate Values**
+```python
+# Load retrieval_fs/my-service.json (if exists)
+if config_exists("my-service"):
+    config_data = load_config("my-service")
+
+    # Populate form fields with existing values
+    for field_key, value in config_data.items():
+        if field_key in form_fields:
+            form_fields[field_key].value = value
+        else:
+            # Orphan data - field exists in config but not in template
+            preserved_data[field_key] = value  # Store for later
+```
+
+**Step 4: Handle Orphan Data (Strategy B - Preserve)**
+- If config file contains fields that are NOT in the current template, preserve them in a hidden variable
+- When user saves, merge these orphan fields back into the output
+- This prevents data loss when templates are updated
+
+**Step 5: Render UI**
+```python
+# Render form with appropriate buttons based on permissions
+render_form(form_fields)
+
+if can_delete:
+    render_delete_button()
+
+if can_manage_access:
+    render_manage_access_button()
+
+render_save_button()  # All editors and owners can save
+```
+
+#### 11.1.5 Orphan Data Handling
+
+**Problem:** A field exists in the configuration file but has been removed from the template.
+
+**Example Scenario:**
+1. Template version 1 has: `service_name`, `service_timeout`, `debug_mode`
+2. Config file contains: `{"service_name": "api", "service_timeout": 5000, "debug_mode": true}`
+3. Owner updates template to version 2, removing `debug_mode`
+4. User opens the configuration - what happens to `debug_mode`?
+
+**Solution: Preserve Orphan Data (Strategy B)**
+- When loading config (Step 3), detect fields not present in template
+- Store orphan data in hidden state: `preserved_data = {"debug_mode": true}`
+- When user saves, merge: `final_config = {form_data} + {preserved_data}`
+- Result: `debug_mode` is preserved even though it's not visible in the form
+
+**Rationale:**
+- Prevents accidental data loss during template evolution
+- Allows rollback: If owner reverts to template v1, `debug_mode` reappears
+- Warning: Orphan data accumulates - document cleanup recommendations
+
+### 11.2 Concurrency & Race Conditions
+
+#### 11.2.1 The "Last Write Wins" Problem
+
+**Scenario:**
+1. **09:00 AM:** Alice opens `/edit/my-service` (config has `timeout: 3000`)
+2. **09:00 AM:** Bob opens `/edit/my-service` (config has `timeout: 3000`)
+3. **09:05 AM:** Alice changes `timeout` to `5000` and saves
+4. **09:06 AM:** Bob changes `timeout` to `8000` and saves (he never saw Alice's change)
+5. **Result:** Final config has `timeout: 8000` - Alice's change is **silently lost**
+
+**Problem:** Without concurrency control, the last person to click "Save" wins, and intermediate changes are lost without warning.
+
+#### 11.2.2 Required Solution: Exclusive Locking
+
+To prevent data loss, the system **must** implement exclusive locking:
+
+**Mechanism: File-Based Exclusive Lock**
+
+When a user opens a configuration for editing:
+
+1. **Acquire Lock:**
+   ```python
+   lock_file = f"management_fs/.locks/my-service.lock"
+
+   # Try to create lock file with current user and timestamp
+   if lock_exists(lock_file):
+       lock_info = read_lock(lock_file)
+       return f"Configuration is locked by {lock_info['user']} since {lock_info['timestamp']}"
+
+   create_lock(lock_file, {"user": SSO_USERNAME, "timestamp": now()})
+   ```
+
+2. **Display Lock Status:**
+   - Show banner: "You have exclusive edit access. Lock acquired at 09:00 AM."
+   - Other users see: "This configuration is locked by Alice (editing since 09:00 AM). Try again later."
+
+3. **Release Lock:**
+   - On Save: Release lock automatically
+   - On Cancel: Release lock
+   - On Session Timeout: Auto-release after 15 minutes of inactivity
+   - On Browser Close: Best-effort release (use `beforeunload` event)
+
+4. **Lock Timeout & Override:**
+   - Config Administrators can forcefully break locks if user's session crashed
+   - Log lock breaks in audit trail
+
+**Implementation Notes:**
+
+**Lock File Location:**
+- Store in Management Filesystem: `management_fs/.locks/[template-name].lock`
+- Do NOT store in Retrieval Filesystem (locks are internal metadata)
+
+**Lock File Content:**
+```json
+{
+  "locked_by": "alice.smith",
+  "locked_at": "2025-11-19T09:00:15Z",
+  "session_id": "abc123"
+}
+```
+
+**Lock Cleanup:**
+- Implement background job to release locks older than 15 minutes
+- When user logs in, check for stale locks by this user and auto-release
+
+**Alternative: Optimistic Locking (NOT RECOMMENDED for this spec)**
+
+The user requested **exclusive locking** to ensure only one person can modify at a time. Optimistic locking (version checking on save) would allow conflicts, which violates the requirement.
+
+#### 11.2.3 UI/UX for Locked Configurations
+
+**Read-Only View for Locked Configs:**
+
+When a user tries to open a locked configuration:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ Configuration: my-service (READ-ONLY)          User: bob.jones     │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  ⚠ This configuration is currently locked for editing              │
+│     Locked by: alice.smith                                         │
+│     Since: 2025-11-19 09:00:15                                     │
+│                                                                    │
+│  You can view the current values below, but cannot make changes.   │
+│                                                                    │
+│  [Refresh to Check Lock Status]                                    │
+│                                                                    │
+│  ────────────────────────────────────────────────────────────────  │
+│                                                                    │
+│  Service Timeout (ms)                                              │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │ 5000                                              [disabled]  │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│  ... (all fields shown as disabled/read-only)                      │
+│                                                                    │
+│  [Close]                                                           │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Active Edit View (Lock Holder):**
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ Edit Configuration: my-service                  User: alice.smith  │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  🔒 You have exclusive edit access                                 │
+│     Lock acquired: 2025-11-19 09:00:15                             │
+│     Auto-release in: 14 minutes (on save, cancel, or timeout)      │
+│                                                                    │
+│  ────────────────────────────────────────────────────────────────  │
+│  ... (editable form fields)                                        │
+│                                                                    │
+│  [Cancel & Release Lock]                          [Save]           │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### 11.3 Additional Implementation Considerations
+
+#### 11.3.1 File System Failures
+
+**Scenario:** The Management Filesystem becomes unavailable (NFS mount fails, disk full, permissions issue).
+
+**Requirements:**
+- Display clear error message: "System error: Unable to access template storage. Contact administrator."
+- Log detailed error to system logs (not visible to user)
+- Do NOT expose file system paths or internal structure to users
+- Gracefully degrade: If templates can't be loaded, show list of configs that are already cached (if applicable)
+
+#### 11.3.2 External Dependency Failures (lookup_file)
+
+**Scenario:** A template references `lookup_file: /etc/config/instances.txt` but the file is missing or unreadable.
+
+**Requirements:**
+- Detect during form rendering (Step 2 of assembly)
+- Show field-level error: "⚠ Data source unavailable: instance list cannot be loaded"
+- Disable the affected field (render as disabled dropdown with error message)
+- Allow saving other fields if possible (partial save capability)
+- Admin notification: Log to audit trail that lookup_file is missing
+
+#### 11.3.3 Template-Config Schema Mismatch
+
+**Scenario:** Config file contains `service_timeout: "fast"` (string) but template defines `type: number`.
+
+**Requirements:**
+- Detect during value population (Step 3 of assembly)
+- Attempt type coercion: Try to convert "5000" string → 5000 number
+- If coercion fails, show validation error: "⚠ Invalid value for service_timeout: expected number, got string"
+- Preserve original value in orphan data (don't lose it)
+- Prevent save until user corrects the value
