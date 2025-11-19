@@ -98,7 +98,7 @@ The form generation and validation rely on two strategies:
 | :--- | :--- | :--- |
 | `min` / `max` / `regex` | **Range & Pattern Checking** | Enforces strict data format and boundary rules. |
 | `options` | **Predefined Dropdown** | Renders a standard dropdown from an explicit list of allowed values. |
-| `lookup_file` | **Searchable Dropdown** | Reads an **external local test file** line-by-line to populate the input field options, supporting dynamic data lists. |
+| `lookup_file` | **Searchable Dropdown** | Reads an **external local .txt file** to populate dropdown options. File format: plain text, one value per line. Optional: supports multiple columns with separator (e.g., comma, tab) - first column used as values. |
 
 ---
 
@@ -155,9 +155,10 @@ region_deployment:
 # ----------------------------------------------------
 # 3. External File Lookup (Searchable Dropdown)
 # ----------------------------------------------------
-database_instance:
-  lookup_file: /etc/config/available_databases.txt
-  # The form will read this file (line-by-line) to populate the dropdown.
+file_instance:
+  lookup_file: /etc/config/available_instances.txt
+  # The form reads this local .txt file to populate the dropdown.
+  # Format: One value per line, or multiple columns with separator (first column used)
 
 # ----------------------------------------------------
 # 4. Owner & Support Unit Delegation (Metadata)
@@ -180,7 +181,7 @@ When an Administrator uploads the template above, the **NiceGUI Management Tier*
 | `service_timeout_ms` | **Number Input Field** | **Inference:** Forces integer input.<br>**Explicit:** Input must be between 1,000 and 15,000. |
 | `debug_log_level` | **Text Input Field** | **Explicit (Regex):** Input string must be `INFO`, `WARN`, `DEBUG`, or `ERROR`. |
 | `region_deployment` | **Standard Dropdown** | **Explicit (Options):** User can only select from the three predefined regions. |
-| `database_instance` | **Searchable Dropdown** | **Explicit (Lookup):** Populated dynamically from the contents of the `/etc/config/available_databases.txt` file. |
+| `file_instance` | **Searchable Dropdown** | **Explicit (Lookup):** Populated dynamically from local .txt file. Supports one value per line or multiple columns with separator. |
 
 ## 3\. The Final Saved Configuration (Output)
 
@@ -192,7 +193,7 @@ Once the user fills out the generated form and saves it, the DCCM writes a clean
   "service_timeout_ms": 5000,
   "debug_log_level": "WARN",
   "region_deployment": "EU-CENTRAL-1",
-  "database_instance": "DB-Production-Alpha"
+  "file_instance": "instance-prod-01"
 }
 ```
 
@@ -201,7 +202,7 @@ Once the user fills out the generated form and saves it, the DCCM writes a clean
 service_timeout_ms: 5000
 debug_log_level: WARN
 region_deployment: EU-CENTRAL-1
-database_instance: DB-Production-Alpha
+file_instance: instance-prod-01
 ```
 
 *(The owner and support unit information is saved as separate metadata associated with this file, not in the final configuration payload.)

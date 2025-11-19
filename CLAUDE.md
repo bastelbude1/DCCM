@@ -48,7 +48,7 @@ The form generation engine is the heart of DCCM. It uses recursive parsing to co
 
 - `min` / `max` / `regex`: Range and pattern enforcement
 - `options`: Renders standard dropdown from explicit list
-- `lookup_file`: Renders searchable dropdown populated from external file (line-by-line reading)
+- `lookup_file`: Renders searchable dropdown populated from external local .txt file. Supports one value per line, or multiple columns with separator (e.g., comma, tab) where first column is used as values.
 
 ### Owner-Centric RBAC
 
@@ -114,8 +114,9 @@ region_deployment:
     - ASIA-SOUTHEAST-2
 
 # External file lookup (searchable dropdown)
-database_instance:
-  lookup_file: /etc/config/available_databases.txt
+file_instance:
+  lookup_file: /etc/config/available_instances.txt
+  # Reads local .txt file: one value per line or columns with separator
 
 # Metadata (not rendered in form)
 owner:
@@ -146,8 +147,11 @@ Owner and delegation information must be stored separately from the output confi
 ### Lookup File Processing
 
 When encountering `lookup_file` directives:
+- Only local .txt files are supported
 - Read the specified file line-by-line
-- Each line becomes an option in the searchable dropdown
+- File format options:
+  - Simple: One value per line (entire line becomes the option)
+  - Delimited: Multiple columns with separator (comma, tab, etc.) - first column used as dropdown value
 - Handle file read errors gracefully
 - Cache file contents if performance becomes an issue
 
