@@ -33,7 +33,7 @@ The Management Tier ensures data integrity through a sequential, modular process
 
 ---
 
-## 3. Functional Scope & Access Control
+## 3. Access Control
 
 ### 3.1 Owner-Centric Role-Based Access Control (RBAC)
 
@@ -45,7 +45,20 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
 | **Authorized User (Editor)** | **Update Configuration Values Only** | Granted via Owner delegation (Support Unit lookup or Manual List). Can modify configuration values through the form but **cannot upload or modify templates**. |
 | **Config Administrator** | **Full Control (Update + Delete)** | Explicitly assigned role; can delete any template or configuration. |
 
-### 3.2 Template Upload & Validation
+### 3.2 Permission Matrix
+
+| Operation | Owner | Authorized User (Editor) | Config Administrator |
+| :--- | :---: | :---: | :---: |
+| **Upload Template** | ✓ | ✗ | ✓ |
+| **Modify Template** | ✓ | ✗ | ✓ |
+| **Update Configuration Values** | ✓ | ✓ | ✓ |
+| **Delete Template/Configuration** | ✗ | ✗ | ✓ |
+| **Add Additional Owners** | ✓ | ✗ | ✓ |
+| **Delegate to Editors** | ✓ | ✗ | ✓ |
+
+---
+
+## 4. Template Upload & Validation
 
 * **Template Upload:** Users upload a JSON or YAML template file that defines the configuration schema and form structure.
 * **Template Validation:** Before accepting the template, the system must perform comprehensive validation:
@@ -64,24 +77,22 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
     * **Authorized Users (Editors)**: Cannot upload or overwrite templates
     * **Others**: Must choose a different name
 
-### 3.3 Configuration File Naming & Retrieval
+---
+
+## 5. Configuration File Naming & Retrieval
 
 * **Configuration Naming:** The configuration filename is **derived from the template name** - users cannot choose a different name.
   * When a template is uploaded with name `my-service`, all configurations generated from it will be named `my-service.[json|yaml]`
 * **File Format:** The user specifies the desired output format (JSON or YAML). The file extension is automatically added based on the selected format.
-* **Configuration Update Permissions:**
-  * **Owners**: Can update configuration values and modify the template
-  * **Authorized Users (Editors)**: Can update configuration values only (cannot modify template)
-  * **Config Administrator**: Full control over all configurations and templates
 * **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[template-name].[json|yaml]`.
 
 ---
 
-## 4. Implementation Logic: The Dynamic Form Builder
+## 6. Implementation Logic: The Dynamic Form Builder
 
 The core logic is the recursive parser that allows configuration structure and validation to be defined entirely within the JSON or YAML template.
 
-### 4.1 Validation Strategy
+### 6.1 Validation Strategy
 
 **Default Behavior: No Validation (Free Text)**
 - By default, all fields render as free text input fields with **no validation**
@@ -102,7 +113,7 @@ The form generation supports two optional validation strategies:
 
 ---
 
-## 5. Technology Stack
+## 7. Technology Stack
 
 | Component | Technology | Rationale |
 | :--- | :--- | :--- |
