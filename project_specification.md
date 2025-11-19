@@ -80,6 +80,12 @@ The **Dynamic Central Configuration Manager (DCCM)** is a simplified, unified co
 - **Evolutive architecture:** New field types and validation rules can be added over time
 - **Future-proof:** System grows with organizational needs without rewriting core logic
 
+**Low Barrier to Entry:**
+- **Anyone can start:** No pre-authorization needed to create a new configuration from a template
+- **Self-service approach:** Users become automatic owners of configurations they create
+- **Democratized configuration management:** Teams can manage their own configurations independently
+- **Access control where it matters:** Editing existing configurations requires owner/editor permissions
+
 ### Architecture
 
 The system utilizes a two-tier architecture for optimal performance:
