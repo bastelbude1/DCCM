@@ -87,12 +87,16 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
 
 The core logic is the recursive parser that allows configuration structure and validation to be defined entirely within the JSON or YAML template.
 
-### 4.1 Advanced Validation Strategy
+### 4.1 Validation Strategy
 
-The form generation and validation rely on two strategies:
+**Default Behavior: No Validation (Free Text)**
+- By default, all fields render as free text input fields with **no validation**
+- The Owner decides what validation (if any) to apply when creating the template
+
+The form generation supports two optional validation strategies:
 
 1.  **Type Inference:** Automatically renders basic input fields (e.g., Number Input for an integer value) based on the template's initial value.
-2.  **Explicit Schema Rules:** The parser looks for specific keywords to enable advanced input features and validation:
+2.  **Explicit Schema Rules (Optional):** The Owner can add specific keywords to enable validation and advanced input features:
 
 | Schema Key | Functionality / NiceGUI Component | Purpose |
 | :--- | :--- | :--- |
@@ -130,7 +134,14 @@ This template is written in **YAML** (often preferred over JSON for readability)
 # FILE: my-service_prod_template.yaml
 
 # ----------------------------------------------------
-# 1. Basic Type Inference & Range/Pattern Validation
+# 0. Default: Free Text (No Validation)
+# ----------------------------------------------------
+service_description:
+  value: ""
+  # No validation keywords = free text input
+
+# ----------------------------------------------------
+# 1. Optional Type Inference & Range/Pattern Validation
 # ----------------------------------------------------
 service_timeout_ms:
   value: 3000
@@ -138,12 +149,12 @@ service_timeout_ms:
   min: 1000
   max: 15000
   # NOTE: The 'value: 3000' is used for Type Inference (integer)
-  # The 'min/max' is used for Explicit Rules Validation
+  # The 'min/max' is used for Explicit Rules Validation (OPTIONAL)
 
 debug_log_level:
   value: INFO
   regex: '^(INFO|WARN|DEBUG|ERROR)$'
-  # Ensures the input string matches one of these specific keywords
+  # Regex validation is OPTIONAL - Owner decides whether to enforce it
 
 # ----------------------------------------------------
 # 2. Predefined Strings (Dropdowns)

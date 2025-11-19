@@ -42,9 +42,14 @@ When a configuration is submitted through the generated form:
 
 The form generation engine is the heart of DCCM. It uses recursive parsing to convert YAML/JSON templates into validated input forms.
 
+**Default Behavior: Free Text (No Validation)**
+- By default, fields with no validation keywords render as free text inputs
+- Owners decide what validation (if any) to apply in their templates
+- Validation is completely optional
+
 **Type Inference**: Automatically renders appropriate inputs based on initial values (e.g., number input for integers)
 
-**Explicit Schema Rules**: Recognized keywords that control form generation and validation:
+**Explicit Schema Rules (Optional)**: Recognized keywords that Owners can use to control form generation and validation:
 
 - `min` / `max` / `regex`: Range and pattern enforcement
 - `options`: Renders standard dropdown from explicit list
@@ -96,14 +101,18 @@ The system has two distinct workflows: template upload and configuration creatio
 ## Template Structure Example
 
 ```yaml
-# Type inference with explicit validation
+# Default: Free text (no validation)
+service_description:
+  value: ""
+
+# Type inference with optional explicit validation
 service_timeout_ms:
   value: 3000
   type_check: 'integer'
   min: 1000
   max: 15000
 
-# Regex validation
+# Optional regex validation
 debug_log_level:
   value: INFO
   regex: '^(INFO|WARN|DEBUG|ERROR)$'
