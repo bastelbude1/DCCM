@@ -2618,59 +2618,184 @@ When a user tries to open a locked configuration:
 
 ### 11.1 Effort Estimation Matrix
 
+**IMPORTANT:** This estimation reflects the **FULL specification** including all features added during refinement (multi-environment, drift detection, validation scripts, registries).
+
+#### Core Components (Original Scope)
+
 | Component | Complexity | Estimated Days | Notes |
 | :--- | :--- | :--- | :--- |
 | **Project Skeleton & Infrastructure** | Low | 2 | Setup Repo, CI/CD mock, Env vars, Logging. |
 | **Dynamic Form Builder (The Core)** | High | 7 | Parsing YAML to NiceGUI elements. Binding state. |
-| **Validation Logic** | Medium | 3 | Regex, Min/Max, and Type checking. |
-| **File I/O & "Lookup" Parsing** | Low | 2 | Reading/Writing JSON/YAML, parsing `.txt` lists. |
+| **Validation Logic (Basic)** | Medium | 3 | Regex, Min/Max, and Type checking. |
+| **File I/O & Basic Lookup Parsing** | Low | 2 | Reading/Writing JSON/YAML, parsing `.txt` lists. |
 | **Access Control (RBAC)** | Medium | 3 | Handling `meta.json` and SSO logic. |
-| **UI Polish & UX** | Medium | 3 | Making it look like the mockups, error toasts. |
-| **Buffer / Testing** | N/A | 5 | Integration testing, fixing "weird" bugs. |
-| **TOTAL** | | **25 Days** | (approx 5 working weeks - *tight but doable in 4 if focused*) |
+| **UI Polish & UX (Basic)** | Medium | 3 | Making it look like the mockups, error toasts. |
+| **Subtotal - Basic DCCM** | | **20 Days** | |
 
-### 11.2 The 4-Week Implementation Plan
+#### Extended Features (Added During Specification)
 
-To hit the 4-week target, the developer must strictly follow this sequence.
+| Component | Complexity | Estimated Days | Notes |
+| :--- | :--- | :--- | :--- |
+| **Multi-Environment Architecture** | High | 7 | Environment registry, per-environment storage/locking/metadata, copy/promote UI, environment selection mandatory workflow. |
+| **Lookup File Registry System** | Medium | 2 | Keyword-based system, registry management UI, validation, error handling. |
+| **Validation Script Integration** | Medium | 3 | Script registry, execution with timeout, exit code handling, error display, security considerations. |
+| **Configuration Drift Detection** | High | 8 | Background validation service, 3-day threshold tracking, consecutive failure logic, notification emails (4 iterations), admin impact analysis, validation history storage, escalation workflow, false positive prevention. |
+| **Enhanced Per-Environment Audit** | Medium | 2 | Environment field in audit trail, per-environment history tracking. |
+| **Multi-Environment UI Components** | Medium | 3 | Environment selector, copy/promote modal, multi-env status dashboard, per-env locking indicators. |
+| **Subtotal - Extended Features** | | **25 Days** | |
 
-#### Week 1: The "Happy Path" Engine
+#### Testing & Buffer
+
+| Component | Complexity | Estimated Days | Notes |
+| :--- | :--- | :--- | :--- |
+| **Integration Testing** | N/A | 5 | End-to-end workflows, multi-environment scenarios, drift detection edge cases. |
+| **Bug Fixes & Edge Cases** | N/A | 5 | File locking race conditions, validation script timeouts, concurrent environment edits. |
+| **Subtotal - Testing** | | **10 Days** | |
+
+#### Total Effort
+
+| Scope | Total Days | Working Weeks | Calendar Weeks |
+| :--- | :--- | :--- | :--- |
+| **MVP (Core Only)** | 20 + 5 buffer = **25 Days** | 5 weeks | 5-6 weeks |
+| **Full Specification (All Features)** | 20 + 25 + 10 = **55 Days** | 11 weeks | 12-14 weeks |
+
+**Realistic Timeline for Full Implementation:** **12-14 weeks (3-3.5 months)**
+
+### 11.2 Phased Implementation Approach
+
+Given the full specification scope (55 days), a phased approach is recommended:
+
+#### Phase 1: MVP Core (5-6 Weeks)
+
+**Goal:** Basic DCCM functionality without extended features.
+
+**Includes:**
+- Template upload and validation
+- Dynamic form generation
+- Basic validation (regex, min/max, type checking)
+- Basic lookup files (inline file paths, not registry)
+- RBAC with owners/editors
+- Single configuration per template (no environments)
+- Save/edit configurations
+- Basic audit trail
+
+**Excludes:**
+- Multi-environment architecture
+- Drift detection system
+- Validation scripts
+- Lookup/script registries
+
+**Timeline:** 25 days (5 weeks) + 1 week buffer = **6 weeks**
+
+---
+
+#### Phase 2: Multi-Environment Support (3-4 Weeks)
+
+**Goal:** Enable dev/test/prod environment separation.
+
+**Includes:**
+- Environment registry
+- Per-environment configuration storage
+- Mandatory environment selection
+- Copy/promote between environments
+- Per-environment locking and metadata
+- Per-environment audit trail
+- Multi-environment UI components
+
+**Timeline:** 7 days (multi-env) + 3 days (UI) + 2 days (audit) + 3 days buffer = **3 weeks**
+
+---
+
+#### Phase 3: Validation & Governance (3-4 Weeks)
+
+**Goal:** Add drift detection and external validation.
+
+**Includes:**
+- Lookup file registry system
+- Validation script integration
+- Configuration drift detection (background service)
+- Notification emails
+- Admin impact analysis
+- Validation history tracking
+- Escalation workflows
+
+**Timeline:** 2 days (lookup registry) + 3 days (validation scripts) + 8 days (drift detection) + 2 days buffer = **3 weeks**
+
+---
+
+#### Recommended Development Sequence
+
+**Option A: MVP First (Fastest Time-to-Value)**
+1. Phase 1 (6 weeks) → Deploy to production
+2. Phase 2 (3 weeks) → Add multi-environment
+3. Phase 3 (3 weeks) → Add drift detection
+
+**Total:** 12 weeks with 3 production releases
+
+**Option B: Full Feature Set (Single Release)**
+1. All phases sequentially
+2. Comprehensive testing
+3. Single production release
+
+**Total:** 12-14 weeks with 1 production release
+
+---
+
+#### Phase 1 Detailed: 6-Week MVP Plan
+
+##### Week 1-2: The "Happy Path" Engine
 
 * **Goal:** Upload a template, generate a form, save a config. (No auth, no validation yet).
 * **Tasks:**
   1. Create the `TemplateParser` class: Reads YAML, returns a Python dictionary.
   2. Build the `FormGenerator`: A loop that iterates through the dictionary and spits out `ui.input` or `ui.select` elements.
   3. Implement the "Save" button: Dumps the form state to a JSON file in the `Retrieval` folder.
-* **Outcome:** A working prototype where you can generate a form and save data.
+  4. Implement template upload UI and file storage.
+* **Outcome:** A working prototype where you can upload templates, generate forms, and save data.
 
-#### Week 2: Validation & Intelligence
+##### Week 3: Validation & Intelligence
 
 * **Goal:** Stop users from entering bad data.
 * **Tasks:**
   1. Implement `Validator`: Connect `min`, `max`, and `regex` from the template to the NiceGUI validation props.
-  2. Implement `LookupHandler`: Write the function to read the external `.txt` files and feed them into the dropdowns.
+  2. Implement `LookupHandler`: Write the function to read external `.txt` files and feed them into dropdowns.
   3. Add the logic for `multi_select` and `checkbox` types.
+  4. Implement Pydantic dynamic model generation for validation.
 * **Outcome:** The system is now "safe" to use but has no security.
 
-#### Week 3: Governance & Security
+##### Week 4: Governance & Security
 
 * **Goal:** Lock it down.
 * **Tasks:**
   1. Implement `AuthMiddleware`: Read `os.environ["SSO_USERNAME"]`.
   2. Implement `MetaStore`: Create the logic to write/read `.meta.json` files alongside templates.
   3. Apply the "Permission Matrix": Disable the "Save" button if the user isn't in the meta file.
-  4. Implement the Audit Log writer (append-only text or JSON lines).
-* **Outcome:** The system is feature-complete according to the spec.
+  4. Implement the Audit Log writer (append-only JSON lines).
+  5. Implement file-based exclusive locking.
+* **Outcome:** The system has security and access control.
 
-#### Week 4: Polish & Edge Cases
+##### Week 5: Polish & Core Features
 
 * **Goal:** Make it usable and robust.
 * **Tasks:**
-  1. **The "Edit" Mode:** Ensure that when loading an existing file, the form populates correctly (this is often trickier than creating new ones).
+  1. **The "Edit" Mode:** Ensure that when loading an existing file, the form populates correctly.
   2. **Error Handling:** What if the `lookup_file` is missing? What if the YAML is broken? Add nice UI notifications (`ui.notify`).
   3. **UI Cleanup:** Add the headers, the dashboard list of templates, and search filtering.
-* **Outcome:** Release Candidate 1.
+  4. **Manage Access UI:** Owner/editor management screen.
+* **Outcome:** Feature-complete MVP.
 
-### 11.3 Why This Fits in 4 Weeks (The Accelerators)
+##### Week 6: Testing & Hardening
+
+* **Goal:** Production readiness.
+* **Tasks:**
+  1. Integration testing (end-to-end workflows).
+  2. Edge case testing (concurrent edits, missing files, malformed templates).
+  3. Performance testing (100+ templates, large lookup files).
+  4. Security review (path traversal, injection risks).
+  5. Documentation (deployment guide, user manual).
+* **Outcome:** Production-ready MVP (Phase 1 complete).
+
+### 11.3 Why Phase 1 MVP Fits in 6 Weeks (The Accelerators)
 
 1. **NiceGUI Data Binding:** In a traditional stack (React + FastAPI), syncing the form state is a huge task. In NiceGUI, it looks like this:
 
@@ -2738,10 +2863,50 @@ To hit the 4-week target, the developer must strictly follow this sequence.
 
 ### 11.4 Risk Factors (Where the Timeline Will Slip)
 
-If the developer spends time on these "traps," 4 weeks will become 8:
+#### Phase 1 MVP Risks (Could extend 6 weeks to 8-10)
 
 1. **"Perfect" Diffing:** Building a UI that shows a visual *diff* (Red/Green lines) between versions is complex. **MVP Mitigation:** Just show the "Before" and "After" JSON text side-by-side.
-2. **Complex File Locking:** Trying to build a perfect database-grade locking mechanism on a file system. **MVP Mitigation:** Use a simple OS-level file lock or the "Last Write Wins" warning.
+2. **Complex File Locking:** Trying to build a perfect database-grade locking mechanism on a file system. **MVP Mitigation:** Use Python's `fcntl` (Linux) or `msvcrt` (Windows) for simple file locks.
 3. **Frontend Perfectionism:** Trying to make NiceGUI look exactly like a custom React app. **MVP Mitigation:** Accept the standard Material Design look that NiceGUI provides out of the box.
+4. **Over-Engineering Template Validation:** Building a full JSON Schema validator. **MVP Mitigation:** Simple field-by-field validation checking for required keywords.
+5. **Premature Optimization:** Worrying about performance before there's a problem. **MVP Mitigation:** Simple file reads/writes. Optimize only if real bottlenecks appear.
+
+#### Phase 2 Multi-Environment Risks (Could extend 3 weeks to 5)
+
+1. **Complex Copy Logic:** Trying to implement "merge" or "diff-based copy" between environments. **Mitigation:** Simple full-copy only. User manually handles conflicts.
+2. **Environment Permissions:** Per-environment access control (dev owners vs prod owners). **Mitigation:** Template-level permissions apply to ALL environments.
+3. **Cross-Environment Validation:** Validating consistency across environments. **Mitigation:** Skip for MVP. Each environment is independent.
+
+#### Phase 3 Drift Detection Risks (Could extend 3 weeks to 5)
+
+1. **Perfect Email System:** Building retry logic, templates, HTML emails. **Mitigation:** Simple text emails via `smtplib`. No retries.
+2. **Complex Notification Rules:** Different rules for different fields, escalation chains. **Mitigation:** Fixed 3-day threshold, fixed 4-week escalation. No customization.
+3. **Real-Time Drift Detection:** Checking on every page load. **Mitigation:** Daily background job only. No real-time checks.
+4. **Validation Script Dependency Management:** Managing script versions, dependencies. **Mitigation:** Scripts are admin-managed binaries. No version tracking.
+
+#### Overall Project Risks (Could extend 12 weeks to 16-18)
+
+1. **Scope Creep:** Adding features not in specification during development.
+   - **Mitigation:** Strict adherence to specification. New features go in Phase 4.
+
+2. **Testing Underestimation:** Complex edge cases in multi-environment + drift detection.
+   - **Mitigation:** Add 20% buffer to each phase for testing.
+
+3. **Integration Complexity:** Background validation service + email system + external scripts.
+   - **Mitigation:** Keep components loosely coupled. Use simple file-based communication.
+
+4. **Production Issues:** Unforeseen problems in production (file permissions, network issues).
+   - **Mitigation:** 2-week post-deployment stabilization period budgeted separately.
+
+#### Conservative Timeline Estimates
+
+| Scenario | Timeline | Notes |
+| :--- | :--- | :--- |
+| **Best Case** | 12 weeks | Experienced dev, no major blockers, tight scope control |
+| **Realistic** | 14 weeks | Normal development pace with testing |
+| **Conservative** | 16-18 weeks | Includes scope creep, production issues, rework |
+| **Worst Case** | 20+ weeks | Multiple developers, unclear requirements, frequent changes |
+
+**Recommendation for Practice Exam:** Target **Phase 1 MVP (6 weeks)** as the exam scope. Full specification is too large for a practice exam unless it's a multi-month project.
 
 ---
