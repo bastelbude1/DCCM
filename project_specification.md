@@ -56,6 +56,22 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
 | **Add Additional Owners** | ✓ | ✗ | ✓ |
 | **Delegate to Editors** | ✓ | ✗ | ✓ |
 
+### 3.3 Metadata Storage
+
+Access control metadata (Owners, Editors, delegations) must be stored separately from configuration files:
+
+* **Storage Requirement**: Metadata must persist across system restarts and be queryable for authorization checks
+* **Metadata Content**: For each template/configuration, store:
+  * List of Owner usernames (SSO_USERNAME values)
+  * List of Authorized User (Editor) usernames or Support Unit references
+  * Original uploader and upload timestamp
+  * Last modified by and timestamp
+* **Implementation Decision**: The apprentice must choose an appropriate storage mechanism:
+  * Option A: Separate `.meta.json` files alongside each template
+  * Option B: Centralized metadata database or file
+  * Option C: Extended file attributes (xattr) if filesystem supports it
+* **Critical Constraint**: Metadata must **never** appear in configuration files served to consuming applications via the Retrieval Tier
+
 ---
 
 ## 4. Template Upload & Validation
@@ -63,10 +79,17 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
 * **Template Upload:** Users upload a JSON or YAML template file that defines the configuration schema and form structure.
 * **Template Validation:** Before accepting the template, the system must perform comprehensive validation:
   * Verify valid JSON or YAML syntax
-  * Check that all schema keywords are recognized (`min`, `max`, `regex`, `options`, `lookup_file`, etc.)
+  * Check that all schema keywords are recognized (`min`, `max`, `regex`, `options`, `lookup_file`, `separator`, `multi_select`, etc.)
   * Validate that `lookup_file` references point to existing, readable files
+  * Validate that `lookup_file` paths are absolute and do not contain path traversal sequences (e.g., `..`)
   * Display **all validation errors** to the user in a clear, actionable format
   * Reject invalid templates and prevent form generation until errors are resolved
+* **Error Handling During Template Validation:**
+  * **Invalid JSON/YAML syntax**: Display syntax error with line number
+  * **Unrecognized schema keyword**: List all unrecognized keywords
+  * **Missing `lookup_file`**: Report which file paths do not exist or are not readable
+  * **Invalid file path**: Reject paths with traversal sequences or non-absolute paths
+  * **Multiple errors**: Display all errors at once (not just the first error)
 * **Template Naming & Collision Handling:** Templates are saved with a user-provided name. **The template name becomes the configuration filename.**
   * Maximum length: **50 characters**
   * Allowed characters: **Web-safe characters only** (alphanumeric, hyphens, underscores: `a-z`, `A-Z`, `0-9`, `-`, `_`)
@@ -77,6 +100,23 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
     * **Authorized Users (Editors)**: Cannot upload or overwrite templates
     * **Others**: Must choose a different name
 
+### 4.1 Template Update Workflow
+
+When an Owner or Config Administrator updates an existing template:
+
+* **Impact on Existing Configurations**:
+  * Existing configuration files remain unchanged until manually updated by a user
+  * The system does **not** automatically migrate or re-validate existing configurations
+  * Users will see the new template schema when they next edit the configuration
+* **Breaking Changes**:
+  * If the updated template removes fields or changes validation rules, users may encounter errors when updating existing configurations
+  * The system should display clear validation errors indicating which fields no longer conform to the template
+  * **Recommendation to Owner**: Test template changes with a different template name before overwriting production templates
+* **Version History**:
+  * The system does **not** maintain template version history
+  * Overwriting a template permanently replaces the previous version
+  * **Responsibility**: Owners should maintain external backups of templates if version history is needed
+
 ---
 
 ## 5. Configuration File Naming & Retrieval
@@ -85,6 +125,10 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
   * When a template is uploaded with name `my-service`, all configurations generated from it will be named `my-service.[json|yaml]`
 * **File Format:** The user specifies the desired output format (JSON or YAML). The file extension is automatically added based on the selected format.
 * **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[template-name].[json|yaml]`.
+* **Error Handling During Configuration Creation:**
+  * **`lookup_file` disappeared**: If a `lookup_file` that existed during template validation no longer exists when creating/updating a configuration, the system must display an error and prevent saving until the file is restored
+  * **Validation failure**: Display specific field validation errors (e.g., "service_timeout_ms must be between 1000 and 15000")
+  * **Permission denied**: If user lacks permission to update configuration, display clear error message indicating they need Owner or Editor access
 
 ---
 
@@ -123,15 +167,11 @@ The form generation supports two optional validation strategies:
 | **Persistence** | Shared Filesystem | Simplest method for file persistence and direct consumption by the retrieval tier. |
 | **Data Format** | **JSON and YAML** | Both formats supported for template input and configuration output; user selects preferred format. |
 
-That's a great request. To demonstrate the power of the **Dynamic Form Builder**, I'll provide an example of a **YAML template** that defines both a standard configuration structure *and* the advanced validation rules discussed.
+---
 
-The example simulates a configuration file for a **Microservice Feature Toggle System**.
+# Configuration Template Example
 
------
-
-# 📝 DCCM Configuration Template Example
-
-This template is written in **YAML** (often preferred over JSON for readability) and defines the schema for a single application's feature flags.
+The following example demonstrates the Dynamic Form Builder capabilities using a microservice configuration template.
 
 ## 1\. The Configuration Template (Input)
 
@@ -179,10 +219,12 @@ file_instance:
   # Format: One value per line, or multiple columns with separator (first column used)
 
 # ----------------------------------------------------
-# 4. Multi-Select with Delimited File (Metadata Example)
+# 4. Multi-Select with Delimited File
 # ----------------------------------------------------
 # Example: File contains "SU_NAME;LOGIN_NAME" format
-support_units:
+# NOTE: This demonstrates multi-select capability with delimited files
+# Use case: Selecting multiple support teams or user groups
+support_teams:
   lookup_file: /etc/config/support_groups.txt
   separator: ";"
   multi_select: true
@@ -202,7 +244,7 @@ When an Administrator uploads the template above, the **NiceGUI Management Tier*
 | `debug_log_level` | **Text Input Field** | **Explicit (Regex):** Input string must be `INFO`, `WARN`, `DEBUG`, or `ERROR`. |
 | `region_deployment` | **Standard Dropdown** | **Explicit (Options):** User can only select from the three predefined regions. |
 | `file_instance` | **Searchable Dropdown (Single)** | **Explicit (Lookup):** Populated dynamically from local .txt file. |
-| `support_units` | **Multi-Select Dropdown** | **Explicit (Lookup + Multi):** Reads delimited file with `;` separator, displays first column only, allows multiple selections. |
+| `support_teams` | **Multi-Select Dropdown** | **Explicit (Lookup + Multi):** Reads delimited file with `;` separator, displays first column only, allows multiple selections. |
 
 ## 3\. The Final Saved Configuration (Output)
 
@@ -211,6 +253,7 @@ Once the user fills out the generated form and saves it, the DCCM writes a clean
 **Example JSON Output:**
 ```json
 {
+  "service_description": "Production microservice configuration",
   "service_timeout_ms": 5000,
   "debug_log_level": "WARN",
   "region_deployment": "EU-CENTRAL-1",
@@ -220,10 +263,11 @@ Once the user fills out the generated form and saves it, the DCCM writes a clean
 
 **Example YAML Output:**
 ```yaml
+service_description: Production microservice configuration
 service_timeout_ms: 5000
 debug_log_level: WARN
 region_deployment: EU-CENTRAL-1
 file_instance: instance-prod-01
 ```
 
-*(The owner and support unit information is saved as separate metadata associated with this file, not in the final configuration payload.)
+**Note:** Owner and access control metadata (such as Owner list, delegated Editors) are stored separately from the configuration output and are not included in the files served to consuming applications.

@@ -26,7 +26,7 @@ The system consists of two loosely coupled components communicating via a shared
 
 1. **Management Tier (NiceGUI/Python)**: Handles write operations, complex validation, RBAC, and dynamic form generation. Accessed by administrators and editors.
 
-2. **Retrieval Tier (Company Web Server)**: Serves validated configuration files as static content via HTTP GET using the company's standard web server solution. Accessed by consuming applications at `http://[config-host]/[filename].json`.
+2. **Retrieval Tier (Company Web Server)**: Serves validated configuration files as static content via HTTP GET using the company's standard web server solution. Accessed by consuming applications at `http://[config-host]/[filename].[json|yaml]`.
 
 ### Management Flow (Sequential Processing)
 
@@ -130,7 +130,7 @@ file_instance:
   # Reads local .txt file: one value per line or columns with separator
 
 # External file lookup with multi-select and delimiter
-support_units:
+support_teams:
   lookup_file: /etc/config/support_groups.txt
   separator: ";"
   multi_select: true
