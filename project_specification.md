@@ -43,15 +43,15 @@
    - 9.5 [Screen 5: Validation Errors](#95-screen-5-validation-errors)
    - 9.6 [Screen 6: Audit Trail (Config Administrators Only)](#96-screen-6-audit-trail-config-administrators-only)
    - 9.7 [UI Design Guidelines](#97-ui-design-guidelines)
-10. [Implementation Effort & Timeline](#10-implementation-effort--timeline)
-    - 10.1 [Effort Estimation Matrix](#101-effort-estimation-matrix)
-    - 10.2 [The 4-Week Implementation Plan](#102-the-4-week-implementation-plan)
-    - 10.3 [Why This Fits in 4 Weeks (The Accelerators)](#103-why-this-fits-in-4-weeks-the-accelerators)
-    - 10.4 [Risk Factors (Where the Timeline Will Slip)](#104-risk-factors-where-the-timeline-will-slip)
-11. [Critical Implementation Considerations](#11-critical-implementation-considerations)
-    - 11.1 [The Three-Layer Assembly Process](#111-the-three-layer-assembly-process)
-    - 11.2 [Concurrency & Race Conditions](#112-concurrency--race-conditions)
-    - 11.3 [Additional Implementation Considerations](#113-additional-implementation-considerations)
+10. [Critical Implementation Considerations](#10-critical-implementation-considerations)
+    - 10.1 [The Three-Layer Assembly Process](#101-the-three-layer-assembly-process)
+    - 10.2 [Concurrency & Race Conditions](#102-concurrency--race-conditions)
+    - 10.3 [Additional Implementation Considerations](#103-additional-implementation-considerations)
+11. [Implementation Effort & Timeline](#11-implementation-effort--timeline)
+    - 11.1 [Effort Estimation Matrix](#111-effort-estimation-matrix)
+    - 11.2 [The 4-Week Implementation Plan](#112-the-4-week-implementation-plan)
+    - 11.3 [Why This Fits in 4 Weeks (The Accelerators)](#113-why-this-fits-in-4-weeks-the-accelerators)
+    - 11.4 [Risk Factors (Where the Timeline Will Slip)](#114-risk-factors-where-the-timeline-will-slip)
 
 ---
 
@@ -863,91 +863,9 @@ file_instance: instance-prod-01
 
 ---
 
-## 10. Implementation Effort & Timeline
+## 10. Critical Implementation Considerations
 
-### 10.1 Effort Estimation Matrix
-
-| Component | Complexity | Estimated Days | Notes |
-| :--- | :--- | :--- | :--- |
-| **Project Skeleton & Infrastructure** | Low | 2 | Setup Repo, CI/CD mock, Env vars, Logging. |
-| **Dynamic Form Builder (The Core)** | High | 7 | Parsing YAML to NiceGUI elements. Binding state. |
-| **Validation Logic** | Medium | 3 | Regex, Min/Max, and Type checking. |
-| **File I/O & "Lookup" Parsing** | Low | 2 | Reading/Writing JSON/YAML, parsing `.txt` lists. |
-| **Access Control (RBAC)** | Medium | 3 | Handling `meta.json` and SSO logic. |
-| **UI Polish & UX** | Medium | 3 | Making it look like the mockups, error toasts. |
-| **Buffer / Testing** | N/A | 5 | Integration testing, fixing "weird" bugs. |
-| **TOTAL** | | **25 Days** | (approx 5 working weeks - *tight but doable in 4 if focused*) |
-
-### 10.2 The 4-Week Implementation Plan
-
-To hit the 4-week target, the developer must strictly follow this sequence.
-
-#### Week 1: The "Happy Path" Engine
-
-* **Goal:** Upload a template, generate a form, save a config. (No auth, no validation yet).
-* **Tasks:**
-  1. Create the `TemplateParser` class: Reads YAML, returns a Python dictionary.
-  2. Build the `FormGenerator`: A loop that iterates through the dictionary and spits out `ui.input` or `ui.select` elements.
-  3. Implement the "Save" button: Dumps the form state to a JSON file in the `Retrieval` folder.
-* **Outcome:** A working prototype where you can generate a form and save data.
-
-#### Week 2: Validation & Intelligence
-
-* **Goal:** Stop users from entering bad data.
-* **Tasks:**
-  1. Implement `Validator`: Connect `min`, `max`, and `regex` from the template to the NiceGUI validation props.
-  2. Implement `LookupHandler`: Write the function to read the external `.txt` files and feed them into the dropdowns.
-  3. Add the logic for `multi_select` and `checkbox` types.
-* **Outcome:** The system is now "safe" to use but has no security.
-
-#### Week 3: Governance & Security
-
-* **Goal:** Lock it down.
-* **Tasks:**
-  1. Implement `AuthMiddleware`: Read `os.environ["SSO_USERNAME"]`.
-  2. Implement `MetaStore`: Create the logic to write/read `.meta.json` files alongside templates.
-  3. Apply the "Permission Matrix": Disable the "Save" button if the user isn't in the meta file.
-  4. Implement the Audit Log writer (append-only text or JSON lines).
-* **Outcome:** The system is feature-complete according to the spec.
-
-#### Week 4: Polish & Edge Cases
-
-* **Goal:** Make it usable and robust.
-* **Tasks:**
-  1. **The "Edit" Mode:** Ensure that when loading an existing file, the form populates correctly (this is often trickier than creating new ones).
-  2. **Error Handling:** What if the `lookup_file` is missing? What if the YAML is broken? Add nice UI notifications (`ui.notify`).
-  3. **UI Cleanup:** Add the headers, the dashboard list of templates, and search filtering.
-* **Outcome:** Release Candidate 1.
-
-### 10.3 Why This Fits in 4 Weeks (The Accelerators)
-
-1. **NiceGUI Data Binding:** In a traditional stack (React + FastAPI), syncing the form state is a huge task. In NiceGUI, it looks like this:
-
-   ```python
-   # This is why it's fast. Direct binding to a dict.
-   config_data = {"timeout": 3000}
-   ui.number(label="Timeout", value=3000).bind_value(config_data, 'timeout')
-   ```
-
-   This saves days of wiring up API endpoints.
-
-2. **No Database:** You don't need to design tables, write SQL, or handle migrations. You are just dumping `dict` to `json`.
-
-3. **No User Management:** You aren't building a "Forgot Password" flow or a "Registration" page. You rely entirely on the environment variable.
-
-### 10.4 Risk Factors (Where the Timeline Will Slip)
-
-If the developer spends time on these "traps," 4 weeks will become 8:
-
-1. **"Perfect" Diffing:** Building a UI that shows a visual *diff* (Red/Green lines) between versions is complex. **MVP Mitigation:** Just show the "Before" and "After" JSON text side-by-side.
-2. **Complex File Locking:** Trying to build a perfect database-grade locking mechanism on a file system. **MVP Mitigation:** Use a simple OS-level file lock or the "Last Write Wins" warning.
-3. **Frontend Perfectionism:** Trying to make NiceGUI look exactly like a custom React app. **MVP Mitigation:** Accept the standard Material Design look that NiceGUI provides out of the box.
-
----
-
-## 11. Critical Implementation Considerations
-
-### 11.1 The Three-Layer Assembly Process
+### 10.1 The Three-Layer Assembly Process
 
 The DCCM application uses a **three-file merge strategy** to render the configuration edit screen. Understanding this assembly process is critical for correct implementation.
 
@@ -959,7 +877,7 @@ When a user visits `/edit/my-service`, the system reads and merges three distinc
 | **Config** (`.json`/`.yaml`) | **The Decorator** | Paints the walls and places the furniture | Provides **data values** for form fields |
 | **Metadata** (`.meta.json`) | **The Security Guard** | Decides who gets the keys | Controls **access** and permissions |
 
-#### 11.1.1 Layer 1: Template → Builds the Structure
+#### 10.1.1 Layer 1: Template → Builds the Structure
 
 **File:** `management_fs/my-service.yaml`
 
@@ -981,7 +899,7 @@ service_timeout:
 
 **Without this file:** The screen is blank - no form fields exist.
 
-#### 11.1.2 Layer 2: Config → Fills the Data
+#### 10.1.2 Layer 2: Config → Fills the Data
 
 **File:** `retrieval_fs/my-service.json`
 
@@ -999,7 +917,7 @@ service_timeout:
 
 **Without this file:** Form fields are empty (or show default values from template).
 
-#### 11.1.3 Layer 3: Metadata → Controls State & Access
+#### 10.1.3 Layer 3: Metadata → Controls State & Access
 
 **File:** `management_fs/my-service.meta.json`
 
@@ -1030,7 +948,7 @@ service_timeout:
 
 **Without this file:** System cannot determine permissions - should show error.
 
-#### 11.1.4 The Assembly Algorithm
+#### 10.1.4 The Assembly Algorithm
 
 When a user opens `/edit/my-service`, the backend executes this sequence:
 
@@ -1096,7 +1014,7 @@ if can_manage_access:
 render_save_button()  # All editors and owners can save
 ```
 
-#### 11.1.5 Orphan Data Handling
+#### 10.1.5 Orphan Data Handling
 
 **Problem:** A field exists in the configuration file but has been removed from the template.
 
@@ -1117,9 +1035,9 @@ render_save_button()  # All editors and owners can save
 - Allows rollback: If owner reverts to template v1, `debug_mode` reappears
 - Warning: Orphan data accumulates - document cleanup recommendations
 
-### 11.2 Concurrency & Race Conditions
+### 10.2 Concurrency & Race Conditions
 
-#### 11.2.1 The "Last Write Wins" Problem
+#### 10.2.1 The "Last Write Wins" Problem
 
 **Scenario:**
 1. **09:00 AM:** Alice opens `/edit/my-service` (config has `timeout: 3000`)
@@ -1130,7 +1048,7 @@ render_save_button()  # All editors and owners can save
 
 **Problem:** Without concurrency control, the last person to click "Save" wins, and intermediate changes are lost without warning.
 
-#### 11.2.2 Required Solution: Exclusive Locking
+#### 10.2.2 Required Solution: Exclusive Locking
 
 To prevent data loss, the system **must** implement exclusive locking:
 
@@ -1187,7 +1105,7 @@ When a user opens a configuration for editing:
 
 The user requested **exclusive locking** to ensure only one person can modify at a time. Optimistic locking (version checking on save) would allow conflicts, which violates the requirement.
 
-#### 11.2.3 UI/UX for Locked Configurations
+#### 10.2.3 UI/UX for Locked Configurations
 
 **Read-Only View for Locked Configs:**
 
@@ -1238,9 +1156,9 @@ When a user tries to open a locked configuration:
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-### 11.3 Additional Implementation Considerations
+### 10.3 Additional Implementation Considerations
 
-#### 11.3.1 File System Failures
+#### 10.3.1 File System Failures
 
 **Scenario:** The Management Filesystem becomes unavailable (NFS mount fails, disk full, permissions issue).
 
@@ -1250,7 +1168,7 @@ When a user tries to open a locked configuration:
 - Do NOT expose file system paths or internal structure to users
 - Gracefully degrade: If templates can't be loaded, show list of configs that are already cached (if applicable)
 
-#### 11.3.2 External Dependency Failures (lookup_file)
+#### 10.3.2 External Dependency Failures (lookup_file)
 
 **Scenario:** A template references `lookup_file: /etc/config/instances.txt` but the file is missing or unreadable.
 
@@ -1261,7 +1179,7 @@ When a user tries to open a locked configuration:
 - Allow saving other fields if possible (partial save capability)
 - Admin notification: Log to audit trail that lookup_file is missing
 
-#### 11.3.3 Template-Config Schema Mismatch
+#### 10.3.3 Template-Config Schema Mismatch
 
 **Scenario:** Config file contains `service_timeout: "fast"` (string) but template defines `type: number`.
 
@@ -1271,3 +1189,137 @@ When a user tries to open a locked configuration:
 - If coercion fails, show validation error: "⚠ Invalid value for service_timeout: expected number, got string"
 - Preserve original value in orphan data (don't lose it)
 - Prevent save until user corrects the value
+
+---
+
+## 11. Implementation Effort & Timeline
+
+### 11.1 Effort Estimation Matrix
+
+| Component | Complexity | Estimated Days | Notes |
+| :--- | :--- | :--- | :--- |
+| **Project Skeleton & Infrastructure** | Low | 2 | Setup Repo, CI/CD mock, Env vars, Logging. |
+| **Dynamic Form Builder (The Core)** | High | 7 | Parsing YAML to NiceGUI elements. Binding state. |
+| **Validation Logic** | Medium | 3 | Regex, Min/Max, and Type checking. |
+| **File I/O & "Lookup" Parsing** | Low | 2 | Reading/Writing JSON/YAML, parsing `.txt` lists. |
+| **Access Control (RBAC)** | Medium | 3 | Handling `meta.json` and SSO logic. |
+| **UI Polish & UX** | Medium | 3 | Making it look like the mockups, error toasts. |
+| **Buffer / Testing** | N/A | 5 | Integration testing, fixing "weird" bugs. |
+| **TOTAL** | | **25 Days** | (approx 5 working weeks - *tight but doable in 4 if focused*) |
+
+### 11.2 The 4-Week Implementation Plan
+
+To hit the 4-week target, the developer must strictly follow this sequence.
+
+#### Week 1: The "Happy Path" Engine
+
+* **Goal:** Upload a template, generate a form, save a config. (No auth, no validation yet).
+* **Tasks:**
+  1. Create the `TemplateParser` class: Reads YAML, returns a Python dictionary.
+  2. Build the `FormGenerator`: A loop that iterates through the dictionary and spits out `ui.input` or `ui.select` elements.
+  3. Implement the "Save" button: Dumps the form state to a JSON file in the `Retrieval` folder.
+* **Outcome:** A working prototype where you can generate a form and save data.
+
+#### Week 2: Validation & Intelligence
+
+* **Goal:** Stop users from entering bad data.
+* **Tasks:**
+  1. Implement `Validator`: Connect `min`, `max`, and `regex` from the template to the NiceGUI validation props.
+  2. Implement `LookupHandler`: Write the function to read the external `.txt` files and feed them into the dropdowns.
+  3. Add the logic for `multi_select` and `checkbox` types.
+* **Outcome:** The system is now "safe" to use but has no security.
+
+#### Week 3: Governance & Security
+
+* **Goal:** Lock it down.
+* **Tasks:**
+  1. Implement `AuthMiddleware`: Read `os.environ["SSO_USERNAME"]`.
+  2. Implement `MetaStore`: Create the logic to write/read `.meta.json` files alongside templates.
+  3. Apply the "Permission Matrix": Disable the "Save" button if the user isn't in the meta file.
+  4. Implement the Audit Log writer (append-only text or JSON lines).
+* **Outcome:** The system is feature-complete according to the spec.
+
+#### Week 4: Polish & Edge Cases
+
+* **Goal:** Make it usable and robust.
+* **Tasks:**
+  1. **The "Edit" Mode:** Ensure that when loading an existing file, the form populates correctly (this is often trickier than creating new ones).
+  2. **Error Handling:** What if the `lookup_file` is missing? What if the YAML is broken? Add nice UI notifications (`ui.notify`).
+  3. **UI Cleanup:** Add the headers, the dashboard list of templates, and search filtering.
+* **Outcome:** Release Candidate 1.
+
+### 11.3 Why This Fits in 4 Weeks (The Accelerators)
+
+1. **NiceGUI Data Binding:** In a traditional stack (React + FastAPI), syncing the form state is a huge task. In NiceGUI, it looks like this:
+
+   ```python
+   # This is why it's fast. Direct binding to a dict.
+   config_data = {"timeout": 3000}
+   ui.number(label="Timeout", value=3000).bind_value(config_data, 'timeout')
+   ```
+
+   This saves days of wiring up API endpoints.
+
+2. **No Database:** You don't need to design tables, write SQL, or handle migrations. You are just dumping `dict` to `json`.
+
+3. **No User Management:** You aren't building a "Forgot Password" flow or a "Registration" page. You rely entirely on the environment variable.
+
+4. **Pydantic Dynamic Validation:** Generate validation models on-the-fly from templates instead of hand-coding validators.
+
+   **The Problem (Traditional Approach):**
+   - For each template, manually write validation code
+   - Check each field type: `if field == 'timeout': validate_integer(value, min=1000, max=15000)`
+   - Hundreds of lines of repetitive validation logic
+   - Every template change requires code changes
+
+   **The Pydantic Solution:**
+   ```python
+   from pydantic import BaseModel, Field, create_model
+
+   # Read template once
+   template = load_template("my-service")
+
+   # Build Pydantic model dynamically
+   field_definitions = {}
+   for field_key, field_schema in template.items():
+       field_type = infer_type(field_schema)  # int, str, bool
+       constraints = {}
+
+       if 'min' in field_schema:
+           constraints['ge'] = field_schema['min']
+       if 'max' in field_schema:
+           constraints['le'] = field_schema['max']
+       if 'regex' in field_schema:
+           constraints['pattern'] = field_schema['regex']
+
+       field_definitions[field_key] = (field_type, Field(**constraints))
+
+   # Create model class at runtime
+   DynamicConfigModel = create_model('DynamicConfigModel', **field_definitions)
+
+   # Validate entire form payload in one line
+   validated_data = DynamicConfigModel.model_validate(form_data)
+   ```
+
+   **Why This Accelerates Development:**
+   - **Zero validation code per template** - validation is generated, not written
+   - **Automatic error messages** - Pydantic produces clear validation errors
+   - **Type safety** - Catches type mismatches before saving
+   - **One-pass validation** - All fields validated simultaneously (no cascading checks)
+   - **Eliminates bugs** - No risk of forgetting to validate a field
+
+   **Time Saved:**
+   - Manual validation: ~2 hours per template × 10 templates = 20 hours
+   - Pydantic approach: ~4 hours to build the generator once = **16 hours saved**
+
+   This is why dynamic model generation is critical for hitting the 4-week timeline.
+
+### 11.4 Risk Factors (Where the Timeline Will Slip)
+
+If the developer spends time on these "traps," 4 weeks will become 8:
+
+1. **"Perfect" Diffing:** Building a UI that shows a visual *diff* (Red/Green lines) between versions is complex. **MVP Mitigation:** Just show the "Before" and "After" JSON text side-by-side.
+2. **Complex File Locking:** Trying to build a perfect database-grade locking mechanism on a file system. **MVP Mitigation:** Use a simple OS-level file lock or the "Last Write Wins" warning.
+3. **Frontend Perfectionism:** Trying to make NiceGUI look exactly like a custom React app. **MVP Mitigation:** Accept the standard Material Design look that NiceGUI provides out of the box.
+
+---
