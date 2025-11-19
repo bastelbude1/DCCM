@@ -386,13 +386,13 @@ The system supports the following input field types, determined by template conf
 
 | Field Type | When Used | UI Component | Example Use Case |
 | :--- | :--- | :--- | :--- |
-| **Text Input** | Default (no keywords) or `value` is string | Single-line text field | Service name, description |
-| **Number Input** | `value` is numeric or `type_check: 'integer'` | Numeric input with validation | Timeout, port number, retry count |
-| **Text Area** | `multiline: true` | Multi-line text input | Long descriptions, JSON snippets |
+| **Text Input** | Default (no keywords) or `type: 'string'` | Single-line text field | Service name, description |
+| **Number Input** | `type: 'integer'` or `type: 'float'` | Numeric input with validation | Timeout, port number, retry count |
+| **Text Area** | `type: 'textarea'` or `multiline: true` | Multi-line text input | Long descriptions, JSON snippets |
 | **Dropdown (Standard)** | `options` provided (< 10 items) | Standard dropdown | Region selection (3-5 choices) |
 | **Dropdown (Searchable)** | `options` provided (≥ 10 items) OR `lookup_file` | Searchable/autocomplete dropdown | Instance selection (hundreds of choices) |
 | **Multi-Select** | `multi_select: true` with `options` or `lookup_file` | Multi-select dropdown | Multiple teams, tags |
-| **Checkbox** | `type: 'boolean'` or `value` is boolean | Checkbox | Enable/disable feature flags |
+| **Checkbox** | `type: 'boolean'` | Checkbox | Enable/disable feature flags |
 
 **Field Type Selection Logic:**
 1. **Explicit type**: If `type` keyword is present, use it (e.g., `type: 'boolean'`)
@@ -404,20 +404,20 @@ The system supports the following input field types, determined by template conf
 
 **Schema Keywords:**
 
-| Schema Key | Required? | Default Value | Functionality | Purpose |
-| :--- | :---: | :--- | :--- | :--- |
-| `type` | Optional | Inferred from `value` | **Explicit Type Declaration** | Forces specific field type: `'text'`, `'number'`, `'boolean'`, `'textarea'`. Overrides type inference. |
-| `label` | Optional | Field key name | **Form Field Label** | Human-readable label displayed in the form. |
-| `description` | Optional | None (no help text) | **Help Text** | Description/tooltip text displayed below or next to field. |
-| `value` | Optional | `""` (empty string) | **Default/Initial Value** | Initial value for the field. Used for type inference if `type` not specified. |
-| `multiline` | Optional | `false` | **Multi-line Text** | When `true`, renders a text area instead of single-line text input. |
-| `min` / `max` | Optional | None (no validation) | **Range Checking** | Enforces numeric boundaries. Only for number fields. |
-| `regex` | Optional | None (no validation) | **Pattern Checking** | Enforces regex pattern validation. Only for text fields. |
-| `options` | Optional | None | **Predefined Dropdown** | Renders dropdown from explicit list. Searchable if ≥ 10 items. |
-| `lookup_file` | Optional | None | **Searchable Dropdown** | Reads **external local .txt file** to populate searchable dropdown. Ideal for hundreds of choices. |
-| `separator` | Conditional* | None | **File Column Delimiter** | Defines delimiter character (e.g., `;`, `,`, `\t`). *Required if file has multiple columns. |
-| `column` | Optional | `0` (first column) | **Column Index** | Specifies which column to use for dropdown values (0-indexed). Used with `separator`. |
-| `multi_select` | Optional | `false` | **Enable Multi-Select** | When `true`, allows selecting multiple values with `lookup_file` or `options`. |
+| Schema Key | Functionality | Values |
+| :--- | :--- | :--- |
+| `type` | **Strict Data Typing** | `'string'` (default), `'integer'`, `'float'`, `'boolean'`, `'textarea'` |
+| `label` | **Form Field Label** | Any string. Defaults to field key name if not specified. |
+| `description` | **Help Text** | Any string. Displayed below or next to field. |
+| `value` | **Default/Initial Value** | Any value matching the field type. Used for type inference if `type` not specified. |
+| `multiline` | **Multi-line Text** | `true` or `false` (default). When `true`, renders a text area instead of single-line text input. |
+| `min` / `max` | **Range Validation** | Integer/Float values. Only applies if `type` is `'integer'` or `'float'`. |
+| `regex` | **Pattern Validation** | Regular expression string. Only applies to string fields. |
+| `options` | **Predefined Dropdown** | Array of strings. Renders dropdown. Searchable if ≥ 10 items. |
+| `lookup_file` | **External File Dropdown** | Absolute path to `.txt` file. Always renders as searchable dropdown. |
+| `separator` | **File Column Delimiter** | Single character (e.g., `;`, `,`, `\t`). Required if `lookup_file` has multiple columns. |
+| `column` | **Column Index** | Integer (0-indexed). Specifies which column to use from delimited file. Default: `0`. |
+| `multi_select` | **Enable Multi-Select** | `true` or `false` (default). Allows selecting multiple values with `lookup_file` or `options`. |
 
 **Note:** All keywords are optional. The absolute minimum valid field definition is just a field key with no keywords - it renders as a free text input.
 
@@ -488,7 +488,7 @@ service_timeout_ms:
   label: "Service Timeout (milliseconds)"
   description: "Maximum time to wait for service response"
   value: 3000
-  type_check: 'integer'
+  type: 'integer'
   min: 1000
   max: 15000
 
