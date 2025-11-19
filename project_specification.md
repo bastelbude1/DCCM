@@ -49,6 +49,12 @@
      - 5.7.3 [Template List with Multi-Environment Status](#573-template-list-with-multi-environment-status)
 6. [Implementation Logic: The Dynamic Form Builder](#6-implementation-logic-the-dynamic-form-builder)
    - 6.1 [Form Field Types & Validation Strategy](#61-form-field-types--validation-strategy)
+   - 6.2 [Working with Grouped Parameters (Best Practices)](#62-working-with-grouped-parameters-best-practices)
+     - 6.2.1 [Design Philosophy](#621-design-philosophy)
+     - 6.2.2 [Recommended Naming Conventions](#622-recommended-naming-conventions)
+     - 6.2.3 [Consuming Application Pattern](#623-consuming-application-pattern)
+     - 6.2.4 [When NOT to Use DCCM](#624-when-not-to-use-dccm)
+     - 6.2.5 [Benefits of This Approach](#625-benefits-of-this-approach)
 7. [Technology Stack](#7-technology-stack)
 8. [Configuration Template Example](#8-configuration-template-example)
    - 8.1 [The Configuration Template (Input)](#81-the-configuration-template-input)
@@ -1418,6 +1424,314 @@ support_teams:
   database_username: admin
   database_password: secret
   ```
+
+### 6.2 Working with Grouped Parameters (Best Practices)
+
+**Problem:** How do you handle repeating groups of related parameters (e.g., multiple firewall rules, database connections, backup schedules)?
+
+**Answer:** Use **flat structure with naming conventions**. The consuming application parses and groups the fields.
+
+#### 6.2.1 Design Philosophy
+
+**DCCM is for CONFIGURATION, not DATA:**
+- ✅ **5-10 grouped parameters:** Perfect for DCCM with naming convention
+- ⚠️ **20-50 items:** Consider if DCCM is the right tool
+- ❌ **100+ dynamic items:** Use database or specialized config management tool
+
+**Why Flat Structure:**
+- Maintains DCCM's simplicity (no dynamic UI complexity)
+- Clear scope boundary
+- No implementation bloat
+- Works for 80% of use cases
+
+#### 6.2.2 Recommended Naming Conventions
+
+**Pattern 1: Numbered Groups (Fixed Count)**
+
+Use when you have a **known, fixed number** of groups:
+
+**Template Example - Firewall Rules:**
+```yaml
+# Rule 1
+rule1_name:
+  label: "Rule 1: Name"
+  description: "Descriptive name for this firewall rule"
+
+rule1_source:
+  label: "Rule 1: Source IP/CIDR"
+  regex: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(/\\d{1,2})?$"
+
+rule1_port:
+  label: "Rule 1: Port"
+  type: integer
+  min: 1
+  max: 65535
+
+rule1_action:
+  label: "Rule 1: Action"
+  options: ["ALLOW", "DENY"]
+
+# Rule 2
+rule2_name:
+  label: "Rule 2: Name"
+
+rule2_source:
+  label: "Rule 2: Source IP/CIDR"
+  regex: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(/\\d{1,2})?$"
+
+rule2_port:
+  label: "Rule 2: Port"
+  type: integer
+  min: 1
+  max: 65535
+
+rule2_action:
+  label: "Rule 2: Action"
+  options: ["ALLOW", "DENY"]
+
+# Rule 3
+rule3_name:
+  label: "Rule 3: Name"
+
+rule3_source:
+  label: "Rule 3: Source IP/CIDR"
+  regex: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(/\\d{1,2})?$"
+
+rule3_port:
+  label: "Rule 3: Port"
+  type: integer
+  min: 1
+  max: 65535
+
+rule3_action:
+  label: "Rule 3: Action"
+  options: ["ALLOW", "DENY"]
+```
+
+**Output Configuration:**
+```json
+{
+  "rule1_name": "Allow HTTPS",
+  "rule1_source": "10.0.0.0/8",
+  "rule1_port": 443,
+  "rule1_action": "ALLOW",
+  "rule2_name": "Block SSH from Internet",
+  "rule2_source": "0.0.0.0/0",
+  "rule2_port": 22,
+  "rule2_action": "DENY",
+  "rule3_name": "Allow HTTP from VPN",
+  "rule3_source": "192.168.0.0/16",
+  "rule3_port": 80,
+  "rule3_action": "ALLOW"
+}
+```
+
+**Pattern 2: Named Groups (Semantic)**
+
+Use when groups have **distinct purposes**:
+
+**Template Example - Database Connections:**
+```yaml
+primary_db_host:
+  label: "Primary Database: Host"
+
+primary_db_port:
+  label: "Primary Database: Port"
+  type: integer
+  value: 5432
+
+primary_db_name:
+  label: "Primary Database: Database Name"
+
+secondary_db_host:
+  label: "Secondary Database: Host"
+
+secondary_db_port:
+  label: "Secondary Database: Port"
+  type: integer
+  value: 5432
+
+secondary_db_name:
+  label: "Secondary Database: Database Name"
+
+failover_db_host:
+  label: "Failover Database: Host"
+
+failover_db_port:
+  label: "Failover Database: Port"
+  type: integer
+  value: 5432
+
+failover_db_name:
+  label: "Failover Database: Database Name"
+```
+
+**Output Configuration:**
+```json
+{
+  "primary_db_host": "db-primary.example.com",
+  "primary_db_port": 5432,
+  "primary_db_name": "production",
+  "secondary_db_host": "db-secondary.example.com",
+  "secondary_db_port": 5432,
+  "secondary_db_name": "production",
+  "failover_db_host": "db-failover.example.com",
+  "failover_db_port": 5432,
+  "failover_db_name": "production"
+}
+```
+
+**Pattern 3: Prefix Convention**
+
+Use for **hierarchical-like organization** while staying flat:
+
+```yaml
+app_service_name:
+  label: "Application: Service Name"
+
+app_service_port:
+  label: "Application: Service Port"
+  type: integer
+
+app_timeout_ms:
+  label: "Application: Timeout (ms)"
+  type: integer
+
+logging_level:
+  label: "Logging: Level"
+  options: ["DEBUG", "INFO", "WARN", "ERROR"]
+
+logging_max_size_mb:
+  label: "Logging: Max File Size (MB)"
+  type: integer
+
+monitoring_enabled:
+  label: "Monitoring: Enabled"
+  type: boolean
+
+monitoring_endpoint:
+  label: "Monitoring: Endpoint URL"
+```
+
+#### 6.2.3 Consuming Application Pattern
+
+**Python Example - Parsing Numbered Groups:**
+
+```python
+import re
+import json
+
+# Load configuration from DCCM
+with open('/mnt/dccm/public/prod/firewall-rules.json') as f:
+    config = json.load(f)
+
+# Parse grouped parameters using naming convention
+def parse_grouped_fields(config, pattern):
+    """Parse fields matching pattern into grouped structure."""
+    groups = {}
+
+    for key, value in config.items():
+        match = re.match(pattern, key)
+        if match:
+            group_id = match.group(1)  # e.g., "1", "2", "3"
+            field_name = match.group(2)  # e.g., "name", "source", "port", "action"
+
+            if group_id not in groups:
+                groups[group_id] = {}
+            groups[group_id][field_name] = value
+
+    return groups
+
+# Parse firewall rules
+rules = parse_grouped_fields(config, pattern=r'rule(\d+)_(\w+)')
+
+# Result:
+# rules = {
+#   '1': {'name': 'Allow HTTPS', 'source': '10.0.0.0/8', 'port': 443, 'action': 'ALLOW'},
+#   '2': {'name': 'Block SSH from Internet', 'source': '0.0.0.0/0', 'port': 22, 'action': 'DENY'},
+#   '3': {'name': 'Allow HTTP from VPN', 'source': '192.168.0.0/16', 'port': 80, 'action': 'ALLOW'}
+# }
+
+# Use the grouped rules
+for rule_id, rule in sorted(rules.items()):
+    print(f"Applying firewall rule {rule_id}: {rule['action']} {rule['name']}")
+    print(f"  Source: {rule['source']}, Port: {rule['port']}")
+    # Apply rule to firewall...
+```
+
+**Bash Example - Parsing Named Groups:**
+
+```bash
+#!/bin/bash
+
+# Load config from DCCM
+CONFIG_FILE="/mnt/dccm/public/prod/database-connections.json"
+
+# Extract primary database settings
+PRIMARY_HOST=$(jq -r '.primary_db_host' "$CONFIG_FILE")
+PRIMARY_PORT=$(jq -r '.primary_db_port' "$CONFIG_FILE")
+PRIMARY_NAME=$(jq -r '.primary_db_name' "$CONFIG_FILE")
+
+# Extract secondary database settings
+SECONDARY_HOST=$(jq -r '.secondary_db_host' "$CONFIG_FILE")
+SECONDARY_PORT=$(jq -r '.secondary_db_port' "$CONFIG_FILE")
+SECONDARY_NAME=$(jq -r '.secondary_db_name' "$CONFIG_FILE")
+
+# Connect to primary, fallback to secondary
+if ! psql -h "$PRIMARY_HOST" -p "$PRIMARY_PORT" -d "$PRIMARY_NAME" -c "SELECT 1" > /dev/null 2>&1; then
+    echo "Primary database down, using secondary"
+    psql -h "$SECONDARY_HOST" -p "$SECONDARY_PORT" -d "$SECONDARY_NAME"
+else
+    psql -h "$PRIMARY_HOST" -p "$PRIMARY_PORT" -d "$PRIMARY_NAME"
+fi
+```
+
+#### 6.2.4 When NOT to Use DCCM
+
+Consider alternative tools when:
+
+| Scenario | Why DCCM is NOT a Good Fit | Recommended Alternative |
+|:---|:---|:---|
+| **50+ dynamic list items** | Too many template fields to manage | Database with UI, or API-driven config |
+| **Deeply nested hierarchies** | Flat structure becomes unwieldy | Native YAML/JSON config files |
+| **Complex data structures** | Requires arrays of objects, nested maps | Terraform state, Ansible inventory, Consul KV |
+| **User-driven dynamic lists** | Users need to add/remove items themselves | Application with database backend |
+| **Schema changes frequently** | Updating template for each schema change is tedious | Schema-less storage (MongoDB, JSON files) |
+
+**Examples of Poor Fits:**
+- ❌ User management (100s of users with multiple attributes each)
+- ❌ Product catalog (dynamic inventory)
+- ❌ Monitoring targets (dozens of servers with changing IPs)
+- ❌ CI/CD pipeline definitions (complex nested stages)
+
+**Examples of Good Fits:**
+- ✅ Application configuration (5-10 service parameters)
+- ✅ Infrastructure settings (3-5 database connections)
+- ✅ Feature flags (10-20 boolean toggles)
+- ✅ Integration endpoints (2-3 API configurations)
+- ✅ Environment-specific settings (5-10 parameters per env)
+
+#### 6.2.5 Benefits of This Approach
+
+**Maintains DCCM Simplicity:**
+- No dynamic form rows (add/remove buttons)
+- No nested validation complexity
+- No array/object rendering logic
+- Simple, predictable UI
+
+**Clear Responsibility Separation:**
+- **DCCM**: Generates validated flat configuration
+- **Application**: Parses and groups fields based on naming convention
+- Each component does what it's best at
+
+**Works for Majority of Use Cases:**
+- 80% of configuration needs have 5-15 grouped parameters
+- Remaining 20% should use specialized tools anyway
+
+**Prevents Scope Creep:**
+- Clear boundary: config vs data management
+- Keeps implementation focused and maintainable
+- Avoids feature bloat
 
 ---
 
