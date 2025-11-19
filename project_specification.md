@@ -230,8 +230,9 @@ The form generation supports two optional validation strategies:
 | `description` | **Help Text** | Optional description/tooltip text displayed below or next to the field to guide users. |
 | `min` / `max` / `regex` | **Range & Pattern Checking** | Enforces strict data format and boundary rules. |
 | `options` | **Predefined Dropdown** | Renders a standard dropdown from an explicit list of allowed values. |
-| `lookup_file` | **Searchable Dropdown (Single or Multi-Select)** | Reads an **external local .txt file** to populate dropdown options. File format: one value per line, or delimited columns (first column used). |
-| `separator` | **File Column Delimiter** | Used with `lookup_file`. Defines the delimiter character (e.g., `;`, `,`, `\t`). First column becomes dropdown values. |
+| `lookup_file` | **Searchable Dropdown (Single or Multi-Select)** | Reads an **external local .txt file** to populate dropdown options. File format: one value per line, or delimited columns. |
+| `separator` | **File Column Delimiter** | Used with `lookup_file`. Defines the delimiter character (e.g., `;`, `,`, `\t`). Must be used together with `column`. |
+| `column` | **Column Index** | Used with `lookup_file` and `separator`. Specifies which column to use for dropdown values (0-indexed). Default: `0` (first column). |
 | `multi_select` | **Enable Multi-Select** | Used with `lookup_file` or `options`. When `true`, allows selecting multiple values. |
 
 ---
@@ -311,11 +312,12 @@ support_teams:
   description: "Select one or more support teams for this configuration"
   lookup_file: /etc/config/support_groups.txt
   separator: ";"
+  column: 0  # Use first column (SU_NAME), column index is 0-based
   multi_select: true
   # File format example:
   # IT-Support;john.doe
   # DevOps-Team;jane.smith
-  # Only first column (SU_NAME) is shown in dropdown, multiple selections allowed
+  # Column 0 (IT-Support, DevOps-Team) shown in dropdown, column 1 (john.doe, jane.smith) ignored
 ```
 
 ## 2\. Dynamic UI Generation and Validation

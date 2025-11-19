@@ -61,8 +61,9 @@ The form generation engine is the heart of DCCM. It uses recursive parsing to co
 - `description`: Optional help text/tooltip displayed below or next to field
 - `min` / `max` / `regex`: Range and pattern enforcement
 - `options`: Renders standard dropdown from explicit list
-- `lookup_file`: Renders searchable dropdown populated from external local .txt file. Supports one value per line, or multiple columns with delimiter (first column used as values).
-- `separator`: Defines delimiter character for delimited files (e.g., `;`, `,`, `\t`). Used with `lookup_file`.
+- `lookup_file`: Renders searchable dropdown populated from external local .txt file. Supports one value per line, or multiple columns with delimiter.
+- `separator`: Defines delimiter character for delimited files (e.g., `;`, `,`, `\t`). Used with `lookup_file` and `column`.
+- `column`: Specifies which column to use for dropdown values (0-indexed). Default: `0` (first column). Used with `lookup_file` and `separator`.
 - `multi_select`: When `true`, enables multi-select mode for `lookup_file` or `options` dropdowns.
 
 ### Owner-Centric RBAC
@@ -152,7 +153,9 @@ support_teams:
   description: "Select one or more support teams"
   lookup_file: /etc/config/support_groups.txt
   separator: ";"
+  column: 0  # Use first column (0-indexed)
   multi_select: true
+  # File: IT-Support;john.doe → shows "IT-Support" in dropdown
 
 ```
 
@@ -199,11 +202,14 @@ When encountering `lookup_file` directives:
 - Read the specified file line-by-line
 - File format options:
   - **Simple**: One value per line (entire line becomes the option)
-  - **Delimited**: Multiple columns with `separator` character - only first column used as dropdown value
-- Separator support:
+  - **Delimited**: Multiple columns with `separator` character
+- Separator and column support:
   - Use `separator` keyword to define delimiter (e.g., `;`, `,`, `\t`)
-  - Parse each line, extract first column before delimiter
-  - Example: `IT-Support;john.doe` with `;` separator → shows only `IT-Support`
+  - Use `column` keyword to specify which column to use (0-indexed)
+  - Default: `column: 0` (first column) if not specified
+  - Parse each line, extract specified column
+  - Example: `IT-Support;john.doe` with `separator: ";"` and `column: 0` → shows `IT-Support`
+  - Example: `IT-Support;john.doe` with `separator: ";"` and `column: 1` → shows `john.doe`
 - Multi-select support:
   - Use `multi_select: true` to enable multiple value selection
   - Works with both `lookup_file` and `options`
