@@ -68,15 +68,23 @@
    - 9.5 [Screen 5: Validation Errors](#95-screen-5-validation-errors)
    - 9.6 [Screen 6: Audit Trail (Config Administrators Only)](#96-screen-6-audit-trail-config-administrators-only)
    - 9.7 [UI Design Guidelines](#97-ui-design-guidelines)
+     - 9.7.1 [General Principles](#971-general-principles)
+     - 9.7.2 [Field Rendering Rules](#972-field-rendering-rules)
+     - 9.7.3 [Color Coding (Suggested)](#973-color-coding-suggested)
 10. [Critical Implementation Considerations](#10-critical-implementation-considerations)
     - 10.1 [The Three-Layer Assembly Process](#101-the-three-layer-assembly-process)
     - 10.2 [Concurrency & Race Conditions](#102-concurrency--race-conditions)
     - 10.3 [Additional Implementation Considerations](#103-additional-implementation-considerations)
 11. [Implementation Effort & Timeline](#11-implementation-effort--timeline)
     - 11.1 [Effort Estimation Matrix](#111-effort-estimation-matrix)
-    - 11.2 [The 4-Week Implementation Plan](#112-the-4-week-implementation-plan)
-    - 11.3 [Why This Fits in 4 Weeks (The Accelerators)](#113-why-this-fits-in-4-weeks-the-accelerators)
+    - 11.2 [Phased Implementation Approach](#112-phased-implementation-approach)
+    - 11.3 [Why Phase 1 MVP Fits in 6 Weeks (The Accelerators)](#113-why-phase-1-mvp-fits-in-6-weeks-the-accelerators)
     - 11.4 [Risk Factors (Where the Timeline Will Slip)](#114-risk-factors-where-the-timeline-will-slip)
+      - 11.4.1 [Phase 1 MVP Risks](#1141-phase-1-mvp-risks)
+      - 11.4.2 [Phase 2 Multi-Environment Risks](#1142-phase-2-multi-environment-risks)
+      - 11.4.3 [Phase 3 Drift Detection Risks](#1143-phase-3-drift-detection-risks)
+      - 11.4.4 [Overall Project Risks](#1144-overall-project-risks)
+      - 11.4.5 [Conservative Timeline Estimates](#1145-conservative-timeline-estimates)
 
 ---
 
@@ -1774,7 +1782,7 @@ The following example demonstrates the Dynamic Form Builder capabilities using a
 
 **Note on Template Format:**
 - Templates can be uploaded in either **JSON** or **YAML** format
-- The system must auto-detect the format based on file extension (`.json`, `.yaml`, `.yml`) or content
+- The system must auto-detect the format based on file extension first (`.json`, `.yaml`, `.yml`); if extension is missing or invalid, fallback to content-based parsing
 - The examples below use YAML for readability, but all templates can equivalently be written in JSON
 - Both formats produce identical form rendering and validation behavior
 
@@ -2159,8 +2167,9 @@ enable_debug_mode: true
   │  │ Line 34: Invalid lookup_file keyword                         │  │
   │  │   'unknown_list' is not registered. Available: support_teams,│  │
   │  │   instances, regions, environments                           │  │
-  │  │   instances, regions, environments                           │  │
-  │  │ Line 34: Invalid lookup_file keyword                         │  │
+  │  └──────────────────────────────────────────────────────────────┘  │
+  │                                                                    │
+  │  ┌──────────────────────────────────────────────────────────────┐  │
   │  │ Line 45: Lookup file not accessible                          │  │
   │  │   'instances' maps to file that does not exist or cannot be  │  │
   │  │   read. Contact Config Administrator.                        │  │
@@ -2215,13 +2224,13 @@ enable_debug_mode: true
 
 ### 9.7 UI Design Guidelines
 
-#### General Principles
+#### 9.7.1 General Principles
 - **Simplicity**: Clear, uncluttered interface with focus on core tasks
 - **Responsive**: Forms adapt to content (more fields = scrollable)
 - **Validation Feedback**: Real-time validation with clear error messages
 - **Progressive Disclosure**: Show advanced options only when needed
 
-#### Field Rendering Rules
+#### 9.7.2 Field Rendering Rules
 - **Text Input**: Single line, full width by default
 - **Number Input**: With +/- controls, display min/max constraints
 - **Text Area**: Multi-line, resizable, minimum 4 rows
@@ -2230,7 +2239,7 @@ enable_debug_mode: true
 - **Multi-Select**: Checkbox tags that can be added/removed
 - **Checkbox**: Single checkbox with label inline
 
-#### Color Coding (Suggested)
+#### 9.7.3 Color Coding (Suggested)
 - **Info/Help Text**: Gray (#666)
 - **Success/Valid**: Green (#28a745)
 - **Warning**: Orange (#ffc107)
@@ -2477,6 +2486,41 @@ When a user opens a configuration for editing:
 
    create_lock(lock_file, {"user": SSO_USERNAME, "timestamp": now(), "environment": environment})
    ```
+
+   **SECURITY NOTE - Atomic Lock Creation:**
+   The above pseudocode is simplified. The actual implementation **MUST** use atomic file creation to prevent race conditions (TOCTOU vulnerability). Use one of these approaches:
+
+   **Option A - OS-level file locking (Recommended):**
+   ```python
+   import fcntl  # Linux/Unix
+
+   lock_fd = open(lock_file, 'w')
+   try:
+       # Non-blocking exclusive lock
+       fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+       # Lock acquired - write lock metadata
+       json.dump({"user": SSO_USERNAME, "timestamp": now()}, lock_fd)
+   except IOError:
+       # Lock already held by another process
+       return "Configuration locked by another user"
+   ```
+
+   **Option B - Atomic file creation:**
+   ```python
+   import os
+
+   try:
+       # O_CREAT | O_EXCL ensures atomic creation (fails if file exists)
+       fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+       with os.fdopen(fd, 'w') as f:
+           json.dump({"user": SSO_USERNAME, "timestamp": now()}, f)
+   except FileExistsError:
+       # Lock file already exists - another user has lock
+       return "Configuration locked by another user"
+   ```
+
+   **Why This Matters:**
+   The check-then-create pattern (`if lock_exists()` then `create_lock()`) has a race condition where two concurrent requests can both pass the check before either creates the lock file, allowing both to acquire the lock simultaneously.
 
 2. **Display Lock Status:**
    - Show banner: "You have exclusive edit access to the PROD environment. Lock acquired at 09:00 AM."
@@ -2863,7 +2907,7 @@ Given the full specification scope (55 days), a phased approach is recommended:
 
 ### 11.4 Risk Factors (Where the Timeline Will Slip)
 
-#### Phase 1 MVP Risks (Could extend 6 weeks to 8-10)
+#### 11.4.1 Phase 1 MVP Risks (Could extend 6 weeks to 8-10)
 
 1. **"Perfect" Diffing:** Building a UI that shows a visual *diff* (Red/Green lines) between versions is complex. **MVP Mitigation:** Just show the "Before" and "After" JSON text side-by-side.
 2. **Complex File Locking:** Trying to build a perfect database-grade locking mechanism on a file system. **MVP Mitigation:** Use Python's `fcntl` (Linux) or `msvcrt` (Windows) for simple file locks.
@@ -2871,20 +2915,20 @@ Given the full specification scope (55 days), a phased approach is recommended:
 4. **Over-Engineering Template Validation:** Building a full JSON Schema validator. **MVP Mitigation:** Simple field-by-field validation checking for required keywords.
 5. **Premature Optimization:** Worrying about performance before there's a problem. **MVP Mitigation:** Simple file reads/writes. Optimize only if real bottlenecks appear.
 
-#### Phase 2 Multi-Environment Risks (Could extend 3 weeks to 5)
+#### 11.4.2 Phase 2 Multi-Environment Risks (Could extend 3 weeks to 5)
 
 1. **Complex Copy Logic:** Trying to implement "merge" or "diff-based copy" between environments. **Mitigation:** Simple full-copy only. User manually handles conflicts.
 2. **Environment Permissions:** Per-environment access control (dev owners vs prod owners). **Mitigation:** Template-level permissions apply to ALL environments.
 3. **Cross-Environment Validation:** Validating consistency across environments. **Mitigation:** Skip for MVP. Each environment is independent.
 
-#### Phase 3 Drift Detection Risks (Could extend 3 weeks to 5)
+#### 11.4.3 Phase 3 Drift Detection Risks (Could extend 3 weeks to 5)
 
 1. **Perfect Email System:** Building retry logic, templates, HTML emails. **Mitigation:** Simple text emails via `smtplib`. No retries.
 2. **Complex Notification Rules:** Different rules for different fields, escalation chains. **Mitigation:** Fixed 3-day threshold, fixed 4-week escalation. No customization.
 3. **Real-Time Drift Detection:** Checking on every page load. **Mitigation:** Daily background job only. No real-time checks.
 4. **Validation Script Dependency Management:** Managing script versions, dependencies. **Mitigation:** Scripts are admin-managed binaries. No version tracking.
 
-#### Overall Project Risks (Could extend 12 weeks to 16-18)
+#### 11.4.4 Overall Project Risks (Could extend 12 weeks to 16-18)
 
 1. **Scope Creep:** Adding features not in specification during development.
    - **Mitigation:** Strict adherence to specification. New features go in Phase 4.
@@ -2898,7 +2942,7 @@ Given the full specification scope (55 days), a phased approach is recommended:
 4. **Production Issues:** Unforeseen problems in production (file permissions, network issues).
    - **Mitigation:** 2-week post-deployment stabilization period budgeted separately.
 
-#### Conservative Timeline Estimates
+#### 11.4.5 Conservative Timeline Estimates
 
 | Scenario | Timeline | Notes |
 | :--- | :--- | :--- |
