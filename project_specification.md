@@ -66,10 +66,10 @@ Access control metadata (Owners, Editors, delegations) must be stored separately
   * List of Authorized User (Editor) usernames or Support Unit references
   * Original uploader and upload timestamp
   * Last modified by and timestamp
-* **Implementation Decision**: The developer must choose an appropriate storage mechanism:
-  * Option A: Separate `.meta.json` files alongside each template
-  * Option B: Centralized metadata database or file
-  * Option C: Extended file attributes (xattr) if filesystem supports it
+* **Metadata Storage Implementation**: Use separate `.meta.json` files alongside each template
+  * For template `my-service`, store metadata in `my-service.meta.json`
+  * Store in the same directory as templates (Management Tier filesystem)
+  * **Not** in the shared filesystem accessible to the Retrieval Tier
 * **Critical Constraint**: Metadata must **never** appear in configuration files served to consuming applications via the Retrieval Tier
 
 ### 3.4 Audit Trail & History
