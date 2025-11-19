@@ -72,6 +72,37 @@ Access control metadata (Owners, Editors, delegations) must be stored separately
   * Option C: Extended file attributes (xattr) if filesystem supports it
 * **Critical Constraint**: Metadata must **never** appear in configuration files served to consuming applications via the Retrieval Tier
 
+### 3.4 Audit Trail & History
+
+The system must maintain a complete audit trail for compliance and troubleshooting purposes:
+
+* **Audit Storage Location**:
+  * Must be stored on a **separate filesystem** not accessible to regular users
+  * Only **Config Administrators** can access audit trail data
+  * Must be separate from the shared filesystem used for configuration retrieval
+* **Template Change History**:
+  * Every template upload/update must create a versioned history entry
+  * Store: full template content, uploader username, timestamp, change description (optional)
+  * Retain indefinitely (or per company retention policy)
+* **Configuration Value Change History**:
+  * Every configuration update must log the complete before/after state
+  * Store: full configuration content (before and after), username, timestamp, changed fields
+  * Track all value modifications, not just the latest version
+* **Audit Trail Content Requirements**:
+  * **Who**: SSO_USERNAME of the user making the change
+  * **What**: Complete snapshot of template/configuration before and after change
+  * **When**: Precise timestamp (ISO 8601 format recommended)
+  * **Which**: Template/configuration name and affected fields
+* **Restore Capability**:
+  * Config Administrators must be able to restore any previous version of a template
+  * Config Administrators must be able to restore any previous version of a configuration
+  * Restore operation itself must be logged in the audit trail
+  * Restore UI must show diff between current and selected version before confirming
+* **Access Control for Audit Trail**:
+  * Regular users (Owners, Editors): No access to audit trail
+  * Config Administrators: Read access to audit trail, restore capability
+  * Audit trail queries should support filtering by: template name, username, date range
+
 ---
 
 ## 4. Template Upload & Validation
@@ -112,23 +143,52 @@ When an Owner or Config Administrator updates an existing template:
   * If the updated template removes fields or changes validation rules, users may encounter errors when updating existing configurations
   * The system should display clear validation errors indicating which fields no longer conform to the template
   * **Recommendation to Owner**: Test template changes with a different template name before overwriting production templates
-* **Version History**:
-  * The system does **not** maintain template version history
-  * Overwriting a template permanently replaces the previous version
-  * **Responsibility**: Owners should maintain external backups of templates if version history is needed
+* **Audit Trail**:
+  * Every template update is logged in the audit trail (see section 3.4)
+  * Config Administrators can restore previous template versions if needed
+  * Template version history is maintained in the audit trail, not in the main application
 
 ---
 
-## 5. Configuration File Naming & Retrieval
+## 5. Configuration Creation & Management Workflow
+
+**Important Distinction**: Uploading a template does NOT automatically create a configuration file. These are two separate operations:
+
+### 5.1 Template Upload
+* Owner or Config Administrator uploads a template (schema definition)
+* Template is validated and stored
+* **No configuration file is created yet**
+
+### 5.2 Configuration Generation/Editing
+* After a template exists, users can create or edit the configuration:
+  * **Create New Configuration**: User fills out the form generated from template for the first time
+  * **Edit Existing Configuration**: User modifies values in existing configuration
+* The form is dynamically generated based on the current template
+* Upon save, the validated configuration file is written to the shared filesystem (Retrieval Tier)
+
+### 5.3 Configuration File Naming & Retrieval
 
 * **Configuration Naming:** The configuration filename is **derived from the template name** - users cannot choose a different name.
-  * When a template is uploaded with name `my-service`, all configurations generated from it will be named `my-service.[json|yaml]`
+  * When a template is uploaded with name `my-service`, configurations generated from it will be named `my-service.[json|yaml]`
 * **File Format:** The user specifies the desired output format (JSON or YAML). The file extension is automatically added based on the selected format.
 * **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[template-name].[json|yaml]`.
-* **Error Handling During Configuration Creation:**
-  * **`lookup_file` disappeared**: If a `lookup_file` that existed during template validation no longer exists when creating/updating a configuration, the system must display an error and prevent saving until the file is restored
-  * **Validation failure**: Display specific field validation errors (e.g., "service_timeout_ms must be between 1000 and 15000")
-  * **Permission denied**: If user lacks permission to update configuration, display clear error message indicating they need Owner or Editor access
+
+### 5.4 User Operations
+
+The UI must support these distinct operations:
+
+1. **Upload Template** (Owners/Admins only): Upload/update template schema
+2. **Create Configuration** (Owners/Editors): Fill out form to create initial configuration file
+3. **Edit Configuration** (Owners/Editors): Modify existing configuration values
+4. **View Template** (Owners/Editors): View the current template schema (read-only for Editors)
+5. **Delete Template/Configuration** (Admins only): Remove template and associated configuration
+
+### 5.5 Error Handling During Configuration Creation/Editing
+
+* **`lookup_file` disappeared**: If a `lookup_file` that existed during template validation no longer exists when creating/updating a configuration, display error and prevent saving until file is restored
+* **Validation failure**: Display specific field validation errors (e.g., "service_timeout_ms must be between 1000 and 15000")
+* **Permission denied**: If user lacks permission to update configuration, display clear error message indicating they need Owner or Editor access
+* **No template exists**: If user tries to create/edit configuration but template was deleted, display error and prevent operation
 
 ---
 

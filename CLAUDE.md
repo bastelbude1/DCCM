@@ -67,7 +67,10 @@ Access control is based on `SSO_USERNAME` environment variable:
 
 ### Template Upload & Validation
 
-The system has two distinct workflows: template upload and configuration creation.
+**Critical Distinction**: The system has two separate workflows - template upload does NOT create configuration files.
+
+1. **Template Upload**: Owner uploads schema definition (no config file created)
+2. **Configuration Create/Edit**: User fills out form to generate actual config file
 
 **Template Upload Process:**
 - Users upload JSON or YAML template files that define the schema
@@ -156,6 +159,16 @@ The same form can generate output in either JSON or YAML format based on user se
 ### Metadata Storage
 
 Owner and delegation information must be stored separately from the output configuration files. This metadata is required for authorization checks but should never appear in the final JSON/YAML served to consuming applications.
+
+### Audit Trail & History
+
+Complete audit trail required for compliance:
+- **Separate filesystem**: Not accessible to regular users, admin-only
+- **Template history**: Every upload/update logged with full content, user, timestamp
+- **Configuration history**: Every value change logged with before/after state
+- **Restore capability**: Config Administrators can restore any previous version
+- **Access control**: Only Config Administrators can view/restore from audit trail
+- Audit trail supports filtering by template name, username, date range
 
 ### Lookup File Processing
 
