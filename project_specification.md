@@ -324,31 +324,61 @@ The system must maintain a complete audit trail for compliance and troubleshooti
 * **Template Validation:** Before accepting the template, the system must perform comprehensive validation:
   * Verify valid JSON or YAML syntax
   * Check that all schema keywords are recognized (`min`, `max`, `regex`, `options`, `lookup_file`, `separator`, `multi_select`, etc.)
-  * Validate that `lookup_file` references point to existing, readable files
-  * Validate that `lookup_file` paths conform to the lookup file constraints (see below)
+  * Validate that `lookup_file` keywords exist in the lookup registry (see Lookup File Constraints below)
+  * Validate that registered lookup files are readable and correctly formatted
   * Display **all validation errors** to the user in a clear, actionable format
   * Reject invalid templates and prevent form generation until errors are resolved
-* **Lookup File Constraints:**
-  * **Location Requirement:** All `lookup_file` references must be located in a specific subdirectory of the Management Volume:
-    - Required path prefix: `/mnt/dccm/mgmt/lookups/`
-    - Example valid path: `/mnt/dccm/mgmt/lookups/support_groups.txt`
-    - Example invalid path: `/etc/config/support_groups.txt` (rejected - not in lookups directory)
+* **Lookup File Constraints (Predefined Keywords Only):**
+  * **Keyword-Based System:** Template authors do NOT specify file paths. Instead, they use predefined keywords that map to admin-managed files.
+  * **Example Valid Template Usage:**
+    ```yaml
+    support_teams:
+      lookup_file: "support_teams"  # Keyword, not path
+
+    file_instance:
+      lookup_file: "instances"  # Keyword, not path
+    ```
+  * **Predefined Lookup Keywords:**
+    - Config Administrators define a fixed set of available lookup keywords
+    - Each keyword maps to a file in `/mnt/dccm/mgmt/lookups/`
+    - Example mapping configuration (`/mnt/dccm/mgmt/lookup_registry.json`):
+      ```json
+      {
+        "support_teams": "/mnt/dccm/mgmt/lookups/support_groups.txt",
+        "instances": "/mnt/dccm/mgmt/lookups/available_instances.txt",
+        "regions": "/mnt/dccm/mgmt/lookups/aws_regions.txt",
+        "environments": "/mnt/dccm/mgmt/lookups/environments.txt"
+      }
+      ```
+  * **Validation:**
+    - Template validation checks if the `lookup_file` keyword exists in the registry
+    - Reject templates with unrecognized keywords: "Error: 'unknown_keyword' is not a valid lookup. Available: support_teams, instances, regions, environments"
+    - Validation ensures the mapped file exists and is readable
+  * **Benefits of Keyword Approach:**
+    - **Guaranteed file existence** - Admins ensure files exist before adding to registry
+    - **Clear ownership** - Config Administrators are responsible for maintaining lookup files
+    - **Format enforcement** - Admins ensure all files follow the correct format
+    - **Security** - No path traversal risks, no arbitrary file access
+    - **Simplified UX** - Template authors see dropdown of available keywords, no filesystem knowledge required
   * **Security:**
     - The Management Application must have **Read** access to files in `/mnt/dccm/mgmt/lookups/`
     - The Retrieval Web Server must **NOT** have access to these files (Management Volume is not accessible to web server)
-  * **Path Validation:**
-    - Reject paths containing `..` (path traversal)
-    - Reject relative paths (must be absolute)
-    - Reject paths outside `/mnt/dccm/mgmt/lookups/` directory
+    - The lookup registry file is only readable by the Management Application
   * **File Permissions:**
     - Files must be readable by the Management Application process user (e.g., `dccm-app`)
     - Recommended permissions: `644` (owner: root, group: dccm-app)
     - Files owned by root or system administrator, not modifiable by application
+  * **Administrative Responsibility:**
+    - Config Administrators add new lookup keywords via UI or configuration file
+    - Admins ensure files are updated regularly (e.g., when new support teams are created)
+    - System can provide UI to view/edit lookup file contents (Config Administrators only)
 * **Error Handling During Template Validation:**
   * **Invalid JSON/YAML syntax**: Display syntax error with line number
   * **Unrecognized schema keyword**: List all unrecognized keywords
-  * **Missing `lookup_file`**: Report which file paths do not exist or are not readable
-  * **Invalid file path**: Reject paths with traversal sequences or non-absolute paths
+  * **Invalid `lookup_file` keyword**: Report which lookup keywords are not registered
+    - Example: "Error: 'unknown_list' is not a valid lookup keyword. Available: support_teams, instances, regions, environments"
+  * **Missing lookup file**: If registered keyword maps to non-existent file, report error
+    - Example: "Error: Lookup 'instances' is registered but file '/mnt/dccm/mgmt/lookups/available_instances.txt' does not exist or is not readable"
   * **Multiple errors**: Display all errors at once (not just the first error)
 * **Template Naming & Collision Handling:** Templates are saved with a user-provided name. **The template name becomes the configuration filename.**
   * Maximum length: **50 characters**
@@ -414,7 +444,10 @@ The UI must support these distinct operations:
 
 ### 5.5 Error Handling During Configuration Creation/Editing
 
-* **`lookup_file` disappeared**: If a `lookup_file` that existed during template validation no longer exists when creating/updating a configuration, display error and prevent saving until file is restored
+* **`lookup_file` disappeared**: If a lookup keyword's mapped file no longer exists when creating/updating a configuration, display error and prevent saving
+  - Example: "Error: Cannot load lookup 'instances' - admin must restore the file"
+* **Lookup keyword removed from registry**: If a template uses a keyword that was removed from the registry, display error
+  - Example: "Error: Lookup 'deprecated_list' is no longer available. Contact Config Administrator."
 * **Validation failure**: Display specific field validation errors (e.g., "service_timeout_ms must be between 1000 and 15000")
 * **Permission denied**: If user lacks permission to update configuration, display clear error message indicating they need Owner or Editor access
 * **No template exists**: If user tries to create/edit configuration but template was deleted, display error and prevent operation
@@ -484,7 +517,7 @@ support_teams:
 | `min` / `max` | **Range Validation** | Integer/Float values. Only applies if `type` is `'integer'` or `'float'`. |
 | `regex` | **Pattern Validation** | Regular expression string. Only applies to string fields. |
 | `options` | **Predefined Dropdown** | Array of strings. Renders dropdown. Searchable if ≥ 10 items. |
-| `lookup_file` | **External File Dropdown** | Absolute path to `.txt` file. Always renders as searchable dropdown. |
+| `lookup_file` | **External File Dropdown** | Predefined keyword (e.g., `"support_teams"`, `"instances"`). Maps to admin-managed file. Always renders as searchable dropdown. |
 | `separator` | **File Column Delimiter** | Single character (e.g., `;`, `,`, `\t`). Required if `lookup_file` has multiple columns. |
 | `column` | **Column Index** | Integer (0-indexed). Specifies which column to use from delimited file. Default: `0`. |
 | `multi_select` | **Enable Multi-Select** | `true` or `false` (default). Allows selecting multiple values with `lookup_file` or `options`. |
@@ -617,7 +650,8 @@ custom_config:
 file_instance:
   label: "Instance Selection"
   description: "Select the target instance from available instances"
-  lookup_file: /mnt/dccm/mgmt/lookups/available_instances.txt
+  lookup_file: "instances"  # Keyword that maps to admin-managed file
+  # Config Admin has registered "instances" → /mnt/dccm/mgmt/lookups/available_instances.txt
   # File contains hundreds of lines - automatically rendered as SEARCHABLE dropdown
   # User can type to filter/search through options
 
@@ -627,10 +661,11 @@ file_instance:
 support_teams:
   label: "Support Teams"
   description: "Select one or more support teams for this configuration"
-  lookup_file: /mnt/dccm/mgmt/lookups/support_groups.txt
+  lookup_file: "support_teams"  # Keyword that maps to admin-managed file
   separator: ";"
   column: 0  # Use first column (SU_NAME), column index is 0-based
   multi_select: true
+  # Config Admin has registered "support_teams" → /mnt/dccm/mgmt/lookups/support_groups.txt
   # File format example:
   # IT-Support;john.doe
   # DevOps-Team;jane.smith
@@ -898,8 +933,14 @@ enable_debug_mode: true
 │  └──────────────────────────────────────────────────────────────┘  │
 │                                                                    │
 │  ┌──────────────────────────────────────────────────────────────┐  │
-│  │ Line 34: lookup_file path does not exist                     │  │
-│  │   /etc/config/nonexistent.txt not found                      │  │
+  │  │ Line 34: Invalid lookup_file keyword                         │  │
+  │  │   'unknown_list' is not registered. Available: support_teams,│  │
+  │  │   instances, regions, environments                           │  │
+  │  │   instances, regions, environments                           │  │
+  │  │ Line 34: Invalid lookup_file keyword                         │  │
+  │  │ Line 45: Lookup file not accessible                          │  │
+  │  │   'instances' maps to file that does not exist or cannot be  │  │
+  │  │   read. Contact Config Administrator.                        │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 │                                                                    │
 │  ┌──────────────────────────────────────────────────────────────┐  │
@@ -1312,14 +1353,15 @@ When a user tries to open a locked configuration:
 
 #### 10.3.2 External Dependency Failures (lookup_file)
 
-**Scenario:** A template references `lookup_file: /mnt/dccm/mgmt/lookups/instances.txt` but the file is missing or unreadable.
+**Scenario:** A template references `lookup_file: "instances"` but the mapped file is missing or unreadable.
 
 **Requirements:**
 - Detect during form rendering (Step 2 of assembly)
-- Show field-level error: "⚠ Data source unavailable: instance list cannot be loaded"
+- Show field-level error: "⚠ Data source unavailable: instance list cannot be loaded (contact Config Administrator)"
 - Disable the affected field (render as disabled dropdown with error message)
-- Allow saving other fields if possible (partial save capability)
-- Admin notification: Log to audit trail that lookup_file is missing
+- Do NOT allow saving - missing lookup data indicates system configuration issue
+- Admin notification: Log to audit trail that lookup keyword's file is missing
+- Error message should include lookup keyword for admin troubleshooting: "Lookup 'instances' mapped to '/mnt/dccm/mgmt/lookups/available_instances.txt' is not accessible"
 
 #### 10.3.3 Template-Config Schema Mismatch
 
