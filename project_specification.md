@@ -323,9 +323,11 @@ The system must maintain a complete audit trail for compliance and troubleshooti
 * **Template Upload:** Users upload a JSON or YAML template file that defines the configuration schema and form structure.
 * **Template Validation:** Before accepting the template, the system must perform comprehensive validation:
   * Verify valid JSON or YAML syntax
-  * Check that all schema keywords are recognized (`min`, `max`, `regex`, `options`, `lookup_file`, `separator`, `multi_select`, etc.)
+  * Check that all schema keywords are recognized (`min`, `max`, `regex`, `options`, `lookup_file`, `separator`, `multi_select`, `validate_script`, etc.)
   * Validate that `lookup_file` keywords exist in the lookup registry (see Lookup File Constraints below)
   * Validate that registered lookup files are readable and correctly formatted
+  * Validate that `validate_script` keywords exist in the validation scripts registry
+  * Validate that registered validation scripts are executable
   * Display **all validation errors** to the user in a clear, actionable format
   * Reject invalid templates and prevent form generation until errors are resolved
 * **Lookup File Constraints (Predefined Keywords Only):**
@@ -372,6 +374,82 @@ The system must maintain a complete audit trail for compliance and troubleshooti
     - Config Administrators add new lookup keywords via UI or configuration file
     - Admins ensure files are updated regularly (e.g., when new support teams are created)
     - System can provide UI to view/edit lookup file contents (Config Administrators only)
+
+* **Validation Script Constraints (Predefined Keywords Only):**
+  * **Keyword-Based System:** Template authors do NOT specify script paths. Instead, they use predefined keywords that map to admin-managed validation scripts.
+  * **Example Valid Template Usage:**
+    ```yaml
+    assigned_user:
+      label: "Assigned User"
+      description: "Enter SSO username of person responsible"
+      validate_script: "phone"  # Keyword that maps to admin-managed script
+
+    budget_code:
+      label: "Budget Code"
+      description: "Enter active budget code for billing"
+      validate_script: "budget_code"  # Keyword that maps to admin-managed script
+    ```
+  * **Predefined Validation Script Keywords:**
+    - Config Administrators define a fixed set of available validation script keywords
+    - Each keyword maps to an executable script/binary on the DCCM server
+    - Example mapping configuration (`/mnt/dccm/mgmt/validation_scripts.json`):
+      ```json
+      {
+        "phone": {
+          "path": "/usr/local/bin/phone",
+          "description": "Validate username exists in corporate phonebook",
+          "timeout_seconds": 5
+        },
+        "budget_code": {
+          "path": "/usr/local/bin/validate_budget_code.sh",
+          "description": "Check if budget code is active in finance system",
+          "timeout_seconds": 3
+        },
+        "project_code": {
+          "path": "/usr/local/bin/validate_project.py",
+          "description": "Verify project code exists in PMO system",
+          "timeout_seconds": 5
+        }
+      }
+      ```
+  * **Script Execution Protocol:**
+    - DCCM executes the script with user input as first argument: `/usr/local/bin/phone alice.smith`
+    - **Exit Code 0**: Input is **valid** - validation passes
+    - **Exit Code Non-Zero**: Input is **invalid** - validation fails
+    - **stderr Output**: Optional error message to display to user (e.g., "User not found in phonebook")
+    - **stdout Output**: Ignored by DCCM (scripts can output diagnostic info to stdout)
+    - **Timeout**: Script must complete within configured timeout or validation fails
+  * **Validation Timing:**
+    - **Real-time validation (recommended)**: Trigger validation on field blur (when user leaves field)
+    - **Pre-save validation (required)**: Always re-validate all fields before saving configuration
+    - **Error Display**: Show validation errors inline below the field
+  * **Example Error Messages:**
+    - Script exits 0: Field appears valid (green checkmark or no error)
+    - Script exits 1 with stderr "User not found": Display "❌ User not found"
+    - Script exits 2 with stderr "Budget code expired": Display "❌ Budget code expired"
+    - Script timeout: Display "❌ Validation timeout - contact administrator"
+    - Script not found: Display "❌ Validation unavailable - contact administrator"
+  * **Security:**
+    - The Management Application must have **Execute** permission on validation scripts
+    - Scripts must be owned by root or system administrator, not modifiable by application
+    - Scripts run with DCCM application user privileges (not root)
+    - Input sanitization: Escape/validate user input before passing to script to prevent command injection
+    - Never use shell expansion - pass arguments directly to script (e.g., `subprocess.run([script_path, user_input])`)
+  * **Script Permissions:**
+    - Scripts must be executable by the Management Application process user (e.g., `dccm-app`)
+    - Recommended permissions: `755` (owner: root, executable by all)
+    - Scripts should be in protected directory (e.g., `/usr/local/bin/`, not user-writable paths)
+  * **Benefits of Keyword Approach:**
+    - **Reuse existing infrastructure** - leverage scripts that already exist in the organization
+    - **Flexible validation** - any check that can be scripted (LDAP, database, API calls)
+    - **No DCCM code changes** - add new validation types without modifying application
+    - **Security** - no path injection risks, controlled script execution
+    - **Simplified UX** - template authors see dropdown of available validators
+  * **Administrative Responsibility:**
+    - Config Administrators add new validation script keywords via configuration file
+    - Admins ensure scripts are installed, executable, and return correct exit codes
+    - Admins set appropriate timeouts based on script performance
+    - System should provide UI to test validation scripts (Config Administrators only)
 * **Error Handling During Template Validation:**
   * **Invalid JSON/YAML syntax**: Display syntax error with line number
   * **Unrecognized schema keyword**: List all unrecognized keywords
@@ -379,6 +457,10 @@ The system must maintain a complete audit trail for compliance and troubleshooti
     - Example: "Error: 'unknown_list' is not a valid lookup keyword. Available: support_teams, instances, regions, environments"
   * **Missing lookup file**: If registered keyword maps to non-existent file, report error
     - Example: "Error: Lookup 'instances' is registered but file '/mnt/dccm/mgmt/lookups/available_instances.txt' does not exist or is not readable"
+  * **Invalid `validate_script` keyword**: Report which validation script keywords are not registered
+    - Example: "Error: 'unknown_validator' is not a valid validation script. Available: phone, budget_code, project_code"
+  * **Missing validation script**: If registered keyword maps to non-existent or non-executable script, report error
+    - Example: "Error: Validation script 'phone' is registered but '/usr/local/bin/phone' does not exist or is not executable"
   * **Multiple errors**: Display all errors at once (not just the first error)
 * **Template Naming & Collision Handling:** Templates are saved with a user-provided name. **The template name becomes the configuration filename.**
   * Maximum length: **50 characters**
@@ -521,6 +603,7 @@ support_teams:
 | `separator` | **File Column Delimiter** | Single character (e.g., `;`, `,`, `\t`). Required if `lookup_file` has multiple columns. |
 | `column` | **Column Index** | Integer (0-indexed). Specifies which column to use from delimited file. Default: `0`. |
 | `multi_select` | **Enable Multi-Select** | `true` or `false` (default). Allows selecting multiple values with `lookup_file` or `options`. |
+| `validate_script` | **External Validation Script** | Predefined keyword (e.g., `"phone"`, `"budget_code"`). Maps to admin-managed validation script. DCCM executes script with user input as argument. Exit code 0 = valid, non-zero = invalid with optional error message on stderr. |
 
 **Note:** All keywords are optional. The absolute minimum valid field definition is just a field key with no keywords - it renders as a free text input.
 
@@ -591,6 +674,19 @@ service_description:
   description: "Brief description of this service configuration"
   value: ""
   # Free text input with better UX
+
+# ----------------------------------------------------
+# 0c. External Validation via Script
+# ----------------------------------------------------
+assigned_user:
+  label: "Assigned User"
+  description: "SSO username of person responsible for this service"
+  validate_script: "phone"  # Keyword that maps to /usr/local/bin/phone
+  # When user enters "alice.smith" and leaves field:
+  # DCCM executes: /usr/local/bin/phone alice.smith
+  # Exit code 0 → validation passes, show green checkmark
+  # Exit code 1 → validation fails, show error from stderr
+  # Prevents saving until validation passes
 
 # ----------------------------------------------------
 # 1. Optional Type Inference & Range/Pattern Validation
@@ -678,6 +774,7 @@ When an Administrator uploads the template above, the **NiceGUI Management Tier*
 
 | Template Key | UI Component Rendered | Validation Strategy Applied |
 | :--- | :--- | :--- |
+| `assigned_user` | **Text Input Field** | **External Script Validation:** Calls `/usr/local/bin/phone alice.smith` on field blur. Exit code 0 = valid, non-zero = invalid with error message. |
 | `service_timeout_ms` | **Number Input Field** | **Inference:** Forces integer input.<br>**Explicit:** Input must be between 1,000 and 15,000. |
 | `debug_log_level` | **Text Input Field** | **Explicit (Regex):** Input string must be `INFO`, `WARN`, `DEBUG`, or `ERROR`. |
 | `region_deployment` | **Standard Dropdown** | **Explicit (Options):** User can only select from the three predefined regions. |
@@ -692,6 +789,7 @@ Once the user fills out the generated form and saves it, the DCCM writes a clean
 ```json
 {
   "service_description": "Production microservice configuration",
+  "assigned_user": "alice.smith",
   "service_timeout_ms": 5000,
   "debug_log_level": "WARN",
   "region_deployment": "EU-CENTRAL-1",
@@ -704,6 +802,7 @@ Once the user fills out the generated form and saves it, the DCCM writes a clean
 **Example YAML Output:**
 ```yaml
 service_description: Production microservice configuration
+assigned_user: alice.smith
 service_timeout_ms: 5000
 debug_log_level: WARN
 region_deployment: EU-CENTRAL-1
