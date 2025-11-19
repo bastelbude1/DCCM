@@ -4,6 +4,53 @@
 **Technology Base:** Python / NiceGUI / Static Web Server
 **Architecture Pattern:** Two-Tier Management & Retrieval
 
+---
+
+## Table of Contents
+
+1. [Executive Summary](#1-executive-summary)
+2. [Architecture Overview: Two-Tier Model](#2-architecture-overview-two-tier-model)
+   - 2.1 [Component Separation](#21-component-separation)
+   - 2.2 [Filesystem Separation (Critical Security Requirement)](#22-filesystem-separation-critical-security-requirement)
+   - 2.3 [Architecture Diagram](#23-architecture-diagram)
+   - 2.4 [Data Flow](#24-data-flow)
+   - 2.5 [Internal Architecture (Management Flow)](#25-internal-architecture-management-flow)
+3. [Access Control](#3-access-control)
+   - 3.1 [Owner-Centric Role-Based Access Control (RBAC)](#31-owner-centric-role-based-access-control-rbac)
+   - 3.2 [Permission Matrix](#32-permission-matrix)
+   - 3.3 [Metadata Storage](#33-metadata-storage)
+   - 3.4 [Audit Trail & History](#34-audit-trail--history)
+4. [Template Upload & Validation](#4-template-upload--validation)
+   - 4.1 [Template Update Workflow](#41-template-update-workflow)
+5. [Configuration Creation & Management Workflow](#5-configuration-creation--management-workflow)
+   - 5.1 [Template Upload](#51-template-upload)
+   - 5.2 [Configuration Generation/Editing](#52-configuration-generationediting)
+   - 5.3 [Configuration File Naming & Retrieval](#53-configuration-file-naming--retrieval)
+   - 5.4 [User Operations](#54-user-operations)
+   - 5.5 [Error Handling During Configuration Creation/Editing](#55-error-handling-during-configuration-creationediting)
+6. [Implementation Logic: The Dynamic Form Builder](#6-implementation-logic-the-dynamic-form-builder)
+   - 6.1 [Form Field Types & Validation Strategy](#61-form-field-types--validation-strategy)
+7. [Technology Stack](#7-technology-stack)
+8. [Configuration Template Example](#8-configuration-template-example)
+   - 8.1 [The Configuration Template (Input)](#81-the-configuration-template-input)
+   - 8.2 [Dynamic UI Generation and Validation](#82-dynamic-ui-generation-and-validation)
+   - 8.3 [The Final Saved Configuration (Output)](#83-the-final-saved-configuration-output)
+9. [UI Mockups & User Interface Guidelines](#9-ui-mockups--user-interface-guidelines)
+   - 9.1 [Screen 1: Template List (Main Dashboard)](#91-screen-1-template-list-main-dashboard)
+   - 9.2 [Screen 2: Upload Template](#92-screen-2-upload-template)
+   - 9.3 [Screen 3: Generated Configuration Form (Dynamic Form Builder)](#93-screen-3-generated-configuration-form-dynamic-form-builder)
+   - 9.4 [Screen 4: Manage Access (Owners & Editors)](#94-screen-4-manage-access-owners--editors)
+   - 9.5 [Screen 5: Validation Errors](#95-screen-5-validation-errors)
+   - 9.6 [Screen 6: Audit Trail (Config Administrators Only)](#96-screen-6-audit-trail-config-administrators-only)
+   - 9.7 [UI Design Guidelines](#97-ui-design-guidelines)
+10. [Implementation Effort & Timeline](#10-implementation-effort--timeline)
+    - 10.1 [Effort Estimation Matrix](#101-effort-estimation-matrix)
+    - 10.2 [The 4-Week Implementation Plan](#102-the-4-week-implementation-plan)
+    - 10.3 [Why This Fits in 4 Weeks (The Accelerators)](#103-why-this-fits-in-4-weeks-the-accelerators)
+    - 10.4 [Risk Factors (Where the Timeline Will Slip)](#104-risk-factors-where-the-timeline-will-slip)
+
+---
+
 ## 1. Executive Summary
 
 The **Dynamic Central Configuration Manager (DCCM)** is a simplified, unified configuration platform designed to eliminate manual configuration errors and enhance governance. Its core value lies in its **Template-First** approach: uploading a JSON or YAML schema automatically generates a user-friendly form.
@@ -382,11 +429,11 @@ The system supports the following input field types, determined by template conf
 
 ---
 
-# Configuration Template Example
+## 8. Configuration Template Example
 
 The following example demonstrates the Dynamic Form Builder capabilities using a microservice configuration template.
 
-## 1\. The Configuration Template (Input)
+### 8.1 The Configuration Template (Input)
 
 ```yaml
 # FILE: my-service_prod_template.yaml
@@ -485,7 +532,7 @@ support_teams:
   # Column 0 (IT-Support, DevOps-Team) shown in dropdown, column 1 (john.doe, jane.smith) ignored
 ```
 
-## 2\. Dynamic UI Generation and Validation
+### 8.2 Dynamic UI Generation and Validation
 
 When an Administrator uploads the template above, the **NiceGUI Management Tier** renders the following form and enforces the stated rules:
 
@@ -497,7 +544,7 @@ When an Administrator uploads the template above, the **NiceGUI Management Tier*
 | `file_instance` | **Searchable Dropdown (Single)** | **Explicit (Lookup):** Populated dynamically from local .txt file. |
 | `support_teams` | **Multi-Select Dropdown** | **Explicit (Lookup + Multi):** Reads delimited file with `;` separator, displays first column only, allows multiple selections. |
 
-## 3\. The Final Saved Configuration (Output)
+### 8.3 The Final Saved Configuration (Output)
 
 Once the user fills out the generated form and saves it, the DCCM writes a clean, validated configuration file to the Retrieval Tier in the user's selected format (JSON or YAML).
 
@@ -525,9 +572,9 @@ file_instance: instance-prod-01
 
 ---
 
-# UI Mockups & User Interface Guidelines
+## 9. UI Mockups & User Interface Guidelines
 
-## Screen 1: Template List (Main Dashboard)
+### 9.1 Screen 1: Template List (Main Dashboard)
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -563,7 +610,7 @@ file_instance: instance-prod-01
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-## Screen 2: Upload Template
+### 9.2 Screen 2: Upload Template
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -596,7 +643,7 @@ file_instance: instance-prod-01
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-## Screen 3: Generated Configuration Form (Dynamic Form Builder)
+### 9.3 Screen 3: Generated Configuration Form (Dynamic Form Builder)
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -668,7 +715,7 @@ file_instance: instance-prod-01
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-## Screen 4: Manage Access (Owners & Editors)
+### 9.4 Screen 4: Manage Access (Owners & Editors)
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -715,7 +762,7 @@ file_instance: instance-prod-01
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-## Screen 5: Validation Errors
+### 9.5 Screen 5: Validation Errors
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -751,7 +798,7 @@ file_instance: instance-prod-01
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-## Screen 6: Audit Trail (Config Administrators Only)
+### 9.6 Screen 6: Audit Trail (Config Administrators Only)
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -786,15 +833,15 @@ file_instance: instance-prod-01
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-## UI Design Guidelines
+### 9.7 UI Design Guidelines
 
-### General Principles
+#### General Principles
 - **Simplicity**: Clear, uncluttered interface with focus on core tasks
 - **Responsive**: Forms adapt to content (more fields = scrollable)
 - **Validation Feedback**: Real-time validation with clear error messages
 - **Progressive Disclosure**: Show advanced options only when needed
 
-### Field Rendering Rules
+#### Field Rendering Rules
 - **Text Input**: Single line, full width by default
 - **Number Input**: With +/- controls, display min/max constraints
 - **Text Area**: Multi-line, resizable, minimum 4 rows
@@ -803,7 +850,7 @@ file_instance: instance-prod-01
 - **Multi-Select**: Checkbox tags that can be added/removed
 - **Checkbox**: Single checkbox with label inline
 
-### Color Coding (Suggested)
+#### Color Coding (Suggested)
 - **Info/Help Text**: Gray (#666)
 - **Success/Valid**: Green (#28a745)
 - **Warning**: Orange (#ffc107)
@@ -812,9 +859,9 @@ file_instance: instance-prod-01
 
 ---
 
-# Implementation Effort & Timeline
+## 10. Implementation Effort & Timeline
 
-## Effort Estimation Matrix
+### 10.1 Effort Estimation Matrix
 
 | Component | Complexity | Estimated Days | Notes |
 | :--- | :--- | :--- | :--- |
@@ -827,11 +874,11 @@ file_instance: instance-prod-01
 | **Buffer / Testing** | N/A | 5 | Integration testing, fixing "weird" bugs. |
 | **TOTAL** | | **25 Days** | (approx 5 working weeks - *tight but doable in 4 if focused*) |
 
-## The 4-Week Implementation Plan
+### 10.2 The 4-Week Implementation Plan
 
 To hit the 4-week target, the developer must strictly follow this sequence.
 
-### Week 1: The "Happy Path" Engine
+#### Week 1: The "Happy Path" Engine
 
 * **Goal:** Upload a template, generate a form, save a config. (No auth, no validation yet).
 * **Tasks:**
@@ -840,7 +887,7 @@ To hit the 4-week target, the developer must strictly follow this sequence.
   3. Implement the "Save" button: Dumps the form state to a JSON file in the `Retrieval` folder.
 * **Outcome:** A working prototype where you can generate a form and save data.
 
-### Week 2: Validation & Intelligence
+#### Week 2: Validation & Intelligence
 
 * **Goal:** Stop users from entering bad data.
 * **Tasks:**
@@ -849,7 +896,7 @@ To hit the 4-week target, the developer must strictly follow this sequence.
   3. Add the logic for `multi_select` and `checkbox` types.
 * **Outcome:** The system is now "safe" to use but has no security.
 
-### Week 3: Governance & Security
+#### Week 3: Governance & Security
 
 * **Goal:** Lock it down.
 * **Tasks:**
@@ -859,7 +906,7 @@ To hit the 4-week target, the developer must strictly follow this sequence.
   4. Implement the Audit Log writer (append-only text or JSON lines).
 * **Outcome:** The system is feature-complete according to the spec.
 
-### Week 4: Polish & Edge Cases
+#### Week 4: Polish & Edge Cases
 
 * **Goal:** Make it usable and robust.
 * **Tasks:**
@@ -868,7 +915,7 @@ To hit the 4-week target, the developer must strictly follow this sequence.
   3. **UI Cleanup:** Add the headers, the dashboard list of templates, and search filtering.
 * **Outcome:** Release Candidate 1.
 
-## Why This Fits in 4 Weeks (The Accelerators)
+### 10.3 Why This Fits in 4 Weeks (The Accelerators)
 
 1. **NiceGUI Data Binding:** In a traditional stack (React + FastAPI), syncing the form state is a huge task. In NiceGUI, it looks like this:
 
@@ -884,7 +931,7 @@ To hit the 4-week target, the developer must strictly follow this sequence.
 
 3. **No User Management:** You aren't building a "Forgot Password" flow or a "Registration" page. You rely entirely on the environment variable.
 
-## Risk Factors (Where the Timeline Will Slip)
+### 10.4 Risk Factors (Where the Timeline Will Slip)
 
 If the developer spends time on these "traps," 4 weeks will become 8:
 
