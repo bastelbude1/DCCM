@@ -58,9 +58,27 @@ Access control is based on `SSO_USERNAME` environment variable:
 - **Authorized User (Editor)**: Granted access via Owner delegation (Support Unit lookup or manual list), can Update/Modify
 - **Config Administrator**: Explicitly assigned role with full control including deletion
 
+### Template Upload & Validation
+
+The system has two distinct workflows: template upload and configuration creation.
+
+**Template Upload Process:**
+- Users upload JSON or YAML template files that define the schema
+- System performs comprehensive validation before accepting:
+  - Valid JSON/YAML syntax
+  - All schema keywords recognized (`min`, `max`, `regex`, `options`, `lookup_file`)
+  - `lookup_file` references point to existing, readable files
+  - Display ALL validation errors to user clearly
+  - Reject invalid templates until errors resolved
+- Template naming follows same constraints as configurations (50 char, web-safe)
+- Template collision handling:
+  - Owner or Config Administrator: Can overwrite existing template
+  - Others: Must choose different name
+
 ### Configuration Naming & Collision Handling
 
-- Configurations are saved using free-text names provided by users
+**Configuration Creation Process:**
+- After form is generated from template, users fill it out and save validated configuration
 - **Naming constraints:**
   - Maximum 50 characters
   - Web-safe characters only: `a-z`, `A-Z`, `0-9`, `-`, `_`
@@ -68,9 +86,9 @@ Access control is based on `SSO_USERNAME` environment variable:
   - System must validate and reject non-compliant names
 - Users select the desired output format (JSON or YAML)
 - File extension is automatically added based on selected format
-- Before save, check shared filesystem for name collision:
-  - If user is the Owner of existing file: Allow overwrite (update operation)
-  - If user is NOT the Owner: Reject save and require different name
+- Configuration collision handling:
+  - Owner or Config Administrator: Can overwrite existing configuration
+  - Authorized User (Editor) who is not Owner: Must choose different name
 - Final files are served at predictable URLs: `http://[config-host]/[free-text-name].[json|yaml]`
 
 ## Template Structure Example

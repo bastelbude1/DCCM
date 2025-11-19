@@ -51,17 +51,35 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
 | **Authorized User (Editor)** | **Update/Modify** | Granted via Owner delegation (Support Unit lookup or Manual List). |
 | **Config Administrator** | **Full Control (Update + Delete)** | Explicitly assigned role; required for **removal/deletion** of any configuration. |
 
-### 3.2 Configuration File Naming & Retrieval
+### 3.2 Template Upload & Validation
 
-* **File Naming:** Files are saved using a **free text name** input provided by the Authorized User.
+* **Template Upload:** Users upload a JSON or YAML template file that defines the configuration schema and form structure.
+* **Template Validation:** Before accepting the template, the system must perform comprehensive validation:
+  * Verify valid JSON or YAML syntax
+  * Check that all schema keywords are recognized (`min`, `max`, `regex`, `options`, `lookup_file`, etc.)
+  * Validate that `lookup_file` references point to existing, readable files
+  * Display **all validation errors** to the user in a clear, actionable format
+  * Reject invalid templates and prevent form generation until errors are resolved
+* **Template Naming & Collision Handling:** Templates are saved with a user-provided name.
   * Maximum length: **50 characters**
   * Allowed characters: **Web-safe characters only** (alphanumeric, hyphens, underscores: `a-z`, `A-Z`, `0-9`, `-`, `_`)
   * No spaces or special characters that require URL encoding (avoids `%20` in curl requests)
   * The system must validate input and reject non-compliant names
+  * If a template with the same name exists:
+    * **Owner or Config Administrator**: Can overwrite the existing template
+    * **Others**: Must choose a different name
+
+### 3.3 Configuration File Naming & Retrieval
+
+* **Configuration Naming:** After filling out the generated form, users save the validated configuration with a name.
+  * Maximum length: **50 characters**
+  * Allowed characters: **Web-safe characters only** (`a-z`, `A-Z`, `0-9`, `-`, `_`)
+  * No spaces or special characters requiring URL encoding
+  * The system must validate input and reject non-compliant names
 * **File Format:** The user specifies the desired output format (JSON or YAML). The file extension is automatically added based on the selected format.
-* **Collision Handling:** The NiceGUI application runs a check against the Shared Filesystem. If a file with the same name exists:
-  * **If the user is the Owner** of the existing file: Allow overwrite (update operation)
-  * **If the user is NOT the Owner**: Reject the save operation and require the user to choose a different name
+* **Configuration Collision Handling:** If a configuration file with the same name exists:
+  * **Owner or Config Administrator**: Can overwrite the existing configuration
+  * **Authorized User (Editor)** who is not the Owner: Must choose a different name
 * **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[free-text-name].[json|yaml]`.
 
 ---
