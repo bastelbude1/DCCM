@@ -57,6 +57,8 @@ The form generation engine is the heart of DCCM. It uses recursive parsing to co
 
 **Explicit Schema Rules (Optional)**: Recognized keywords that Owners can use to control form generation and validation:
 
+- `label`: Human-readable label displayed in form (if omitted, field key name is used)
+- `description`: Optional help text/tooltip displayed below or next to field
 - `min` / `max` / `regex`: Range and pattern enforcement
 - `options`: Renders standard dropdown from explicit list
 - `lookup_file`: Renders searchable dropdown populated from external local .txt file. Supports one value per line, or multiple columns with delimiter (first column used as values).
@@ -112,10 +114,14 @@ Access control is based on `SSO_USERNAME` environment variable:
 ```yaml
 # Default: Free text (no validation)
 service_description:
+  label: "Service Description"
+  description: "Brief description of this service configuration"
   value: ""
 
 # Type inference with optional explicit validation
 service_timeout_ms:
+  label: "Service Timeout (milliseconds)"
+  description: "Maximum time to wait for service response"
   value: 3000
   type_check: 'integer'
   min: 1000
@@ -123,11 +129,13 @@ service_timeout_ms:
 
 # Optional regex validation
 debug_log_level:
+  label: "Debug Log Level"
   value: INFO
   regex: '^(INFO|WARN|DEBUG|ERROR)$'
 
 # Predefined dropdown
 region_deployment:
+  label: "Deployment Region"
   options:
     - US-EAST-1
     - EU-CENTRAL-1
@@ -135,15 +143,16 @@ region_deployment:
 
 # External file lookup (single-select searchable dropdown)
 file_instance:
+  label: "Instance Selection"
   lookup_file: /etc/config/available_instances.txt
-  # Reads local .txt file: one value per line or columns with separator
 
 # External file lookup with multi-select and delimiter
 support_teams:
+  label: "Support Teams"
+  description: "Select one or more support teams"
   lookup_file: /etc/config/support_groups.txt
   separator: ";"
   multi_select: true
-  # File contains: SU_NAME;LOGIN_NAME (only first column shown)
 
 ```
 

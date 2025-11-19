@@ -226,6 +226,8 @@ The form generation supports two optional validation strategies:
 
 | Schema Key | Functionality / NiceGUI Component | Purpose |
 | :--- | :--- | :--- |
+| `label` | **Form Field Label** | Human-readable label displayed in the form. If omitted, the field key name is used as the label. |
+| `description` | **Help Text** | Optional description/tooltip text displayed below or next to the field to guide users. |
 | `min` / `max` / `regex` | **Range & Pattern Checking** | Enforces strict data format and boundary rules. |
 | `options` | **Predefined Dropdown** | Renders a standard dropdown from an explicit list of allowed values. |
 | `lookup_file` | **Searchable Dropdown (Single or Multi-Select)** | Reads an **external local .txt file** to populate dropdown options. File format: one value per line, or delimited columns (first column used). |
@@ -259,29 +261,35 @@ The following example demonstrates the Dynamic Form Builder capabilities using a
 # 0. Default: Free Text (No Validation)
 # ----------------------------------------------------
 service_description:
+  label: "Service Description"
+  description: "Brief description of this service configuration"
   value: ""
   # No validation keywords = free text input
+  # Field key: service_description, Form label: "Service Description"
 
 # ----------------------------------------------------
 # 1. Optional Type Inference & Range/Pattern Validation
 # ----------------------------------------------------
 service_timeout_ms:
+  label: "Service Timeout (milliseconds)"
+  description: "Maximum time to wait for service response"
   value: 3000
-  type_check: 'integer' # Internal flag for type hint
+  type_check: 'integer'
   min: 1000
   max: 15000
-  # NOTE: The 'value: 3000' is used for Type Inference (integer)
-  # The 'min/max' is used for Explicit Rules Validation (OPTIONAL)
 
 debug_log_level:
+  label: "Debug Log Level"
+  description: "Logging verbosity level for debugging"
   value: INFO
   regex: '^(INFO|WARN|DEBUG|ERROR)$'
-  # Regex validation is OPTIONAL - Owner decides whether to enforce it
 
 # ----------------------------------------------------
 # 2. Predefined Strings (Dropdowns)
 # ----------------------------------------------------
 region_deployment:
+  label: "Deployment Region"
+  description: "AWS region where this service will be deployed"
   options:
     - US-EAST-1
     - EU-CENTRAL-1
@@ -291,17 +299,16 @@ region_deployment:
 # 3. External File Lookup (Searchable Dropdown)
 # ----------------------------------------------------
 file_instance:
+  label: "Instance Selection"
+  description: "Select the target instance from available instances"
   lookup_file: /etc/config/available_instances.txt
-  # The form reads this local .txt file to populate the dropdown.
-  # Format: One value per line, or multiple columns with separator (first column used)
 
 # ----------------------------------------------------
 # 4. Multi-Select with Delimited File
 # ----------------------------------------------------
-# Example: File contains "SU_NAME;LOGIN_NAME" format
-# NOTE: This demonstrates multi-select capability with delimited files
-# Use case: Selecting multiple support teams or user groups
 support_teams:
+  label: "Support Teams"
+  description: "Select one or more support teams for this configuration"
   lookup_file: /etc/config/support_groups.txt
   separator: ";"
   multi_select: true
