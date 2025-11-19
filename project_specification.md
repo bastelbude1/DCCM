@@ -74,6 +74,12 @@ The **Dynamic Central Configuration Manager (DCCM)** is a simplified, unified co
 - No manual form building required
 - Validation rules defined once in the template, enforced consistently
 
+**Generic & Extensible Design:**
+- **Fits many different use cases:** Database configs, service settings, deployment parameters, feature flags, etc.
+- **No code changes needed** for new configuration types - just upload a new template
+- **Evolutive architecture:** New field types and validation rules can be added over time
+- **Future-proof:** System grows with organizational needs without rewriting core logic
+
 ### Architecture
 
 The system utilizes a two-tier architecture for optimal performance:
