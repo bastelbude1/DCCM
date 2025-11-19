@@ -1071,7 +1071,7 @@ if can_manage_access:
 render_save_button()  # All editors and owners can save
 ```
 
-#### 10.1.5 Orphan Data Handling
+#### 10.1.5 Orphan Data Handling (Preserve with Feedback)
 
 **Problem:** A field exists in the configuration file but has been removed from the template.
 
@@ -1081,16 +1081,46 @@ render_save_button()  # All editors and owners can save
 3. Owner updates template to version 2, removing `debug_mode`
 4. User opens the configuration - what happens to `debug_mode`?
 
-**Solution: Preserve Orphan Data (Strategy B)**
-- When loading config (Step 3), detect fields not present in template
+**Solution: Preserve Orphan Data with User Notification**
+
+**Detection:**
+- On load (Step 3 of assembly), identify keys in the config file that are missing from the current template
+- Count orphan fields: `orphan_count = len(preserved_data)`
+
+**Action:**
 - Store orphan data in hidden state: `preserved_data = {"debug_mode": true}`
 - When user saves, merge: `final_config = {form_data} + {preserved_data}`
 - Result: `debug_mode` is preserved even though it's not visible in the form
 
+**UI Feedback (Required):**
+
+Display a **non-blocking warning banner** at the top of the configuration form:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ Edit Configuration: my-service                   User: alice.smith │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  ⚠ 3 fields detected in file that are not in the current template │
+│     They will be preserved upon save. [View Hidden Fields]        │
+│                                                                    │
+│  ────────────────────────────────────────────────────────────────  │
+│  ... (visible form fields)                                         │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Banner Requirements:**
+- Must be visible immediately when form loads (if orphan data exists)
+- Non-blocking: User can still edit and save the form
+- Shows count of orphan fields
+- Styling: Warning color (orange/yellow background)
+- **Optional:** "View Hidden Fields" button for Config Administrators to see raw JSON of preserved data
+
 **Rationale:**
 - Prevents accidental data loss during template evolution
+- **User awareness:** Shifts from silent preservation to informed preservation
 - Allows rollback: If owner reverts to template v1, `debug_mode` reappears
-- Warning: Orphan data accumulates - document cleanup recommendations
+- Warning: Orphan data accumulates - recommend periodic cleanup by Config Administrators
 
 ### 10.2 Concurrency & Race Conditions
 
