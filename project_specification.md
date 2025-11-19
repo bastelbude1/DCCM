@@ -809,3 +809,85 @@ file_instance: instance-prod-01
 - **Warning**: Orange (#ffc107)
 - **Error**: Red (#dc3545)
 - **Primary Actions**: Blue (#007bff)
+
+---
+
+# Implementation Effort & Timeline
+
+## Effort Estimation Matrix
+
+| Component | Complexity | Estimated Days | Notes |
+| :--- | :--- | :--- | :--- |
+| **Project Skeleton & Infrastructure** | Low | 2 | Setup Repo, CI/CD mock, Env vars, Logging. |
+| **Dynamic Form Builder (The Core)** | High | 7 | Parsing YAML to NiceGUI elements. Binding state. |
+| **Validation Logic** | Medium | 3 | Regex, Min/Max, and Type checking. |
+| **File I/O & "Lookup" Parsing** | Low | 2 | Reading/Writing JSON/YAML, parsing `.txt` lists. |
+| **Access Control (RBAC)** | Medium | 3 | Handling `meta.json` and SSO logic. |
+| **UI Polish & UX** | Medium | 3 | Making it look like the mockups, error toasts. |
+| **Buffer / Testing** | N/A | 5 | Integration testing, fixing "weird" bugs. |
+| **TOTAL** | | **25 Days** | (approx 5 working weeks - *tight but doable in 4 if focused*) |
+
+## The 4-Week Implementation Plan
+
+To hit the 4-week target, the developer must strictly follow this sequence.
+
+### Week 1: The "Happy Path" Engine
+
+* **Goal:** Upload a template, generate a form, save a config. (No auth, no validation yet).
+* **Tasks:**
+  1. Create the `TemplateParser` class: Reads YAML, returns a Python dictionary.
+  2. Build the `FormGenerator`: A loop that iterates through the dictionary and spits out `ui.input` or `ui.select` elements.
+  3. Implement the "Save" button: Dumps the form state to a JSON file in the `Retrieval` folder.
+* **Outcome:** A working prototype where you can generate a form and save data.
+
+### Week 2: Validation & Intelligence
+
+* **Goal:** Stop users from entering bad data.
+* **Tasks:**
+  1. Implement `Validator`: Connect `min`, `max`, and `regex` from the template to the NiceGUI validation props.
+  2. Implement `LookupHandler`: Write the function to read the external `.txt` files and feed them into the dropdowns.
+  3. Add the logic for `multi_select` and `checkbox` types.
+* **Outcome:** The system is now "safe" to use but has no security.
+
+### Week 3: Governance & Security
+
+* **Goal:** Lock it down.
+* **Tasks:**
+  1. Implement `AuthMiddleware`: Read `os.environ["SSO_USERNAME"]`.
+  2. Implement `MetaStore`: Create the logic to write/read `.meta.json` files alongside templates.
+  3. Apply the "Permission Matrix": Disable the "Save" button if the user isn't in the meta file.
+  4. Implement the Audit Log writer (append-only text or JSON lines).
+* **Outcome:** The system is feature-complete according to the spec.
+
+### Week 4: Polish & Edge Cases
+
+* **Goal:** Make it usable and robust.
+* **Tasks:**
+  1. **The "Edit" Mode:** Ensure that when loading an existing file, the form populates correctly (this is often trickier than creating new ones).
+  2. **Error Handling:** What if the `lookup_file` is missing? What if the YAML is broken? Add nice UI notifications (`ui.notify`).
+  3. **UI Cleanup:** Add the headers, the dashboard list of templates, and search filtering.
+* **Outcome:** Release Candidate 1.
+
+## Why This Fits in 4 Weeks (The Accelerators)
+
+1. **NiceGUI Data Binding:** In a traditional stack (React + FastAPI), syncing the form state is a huge task. In NiceGUI, it looks like this:
+
+   ```python
+   # This is why it's fast. Direct binding to a dict.
+   config_data = {"timeout": 3000}
+   ui.number(label="Timeout", value=3000).bind_value(config_data, 'timeout')
+   ```
+
+   This saves days of wiring up API endpoints.
+
+2. **No Database:** You don't need to design tables, write SQL, or handle migrations. You are just dumping `dict` to `json`.
+
+3. **No User Management:** You aren't building a "Forgot Password" flow or a "Registration" page. You rely entirely on the environment variable.
+
+## Risk Factors (Where the Timeline Will Slip)
+
+If the developer spends time on these "traps," 4 weeks will become 8:
+
+1. **"Perfect" Diffing:** Building a UI that shows a visual *diff* (Red/Green lines) between versions is complex. **MVP Mitigation:** Just show the "Before" and "After" JSON text side-by-side.
+2. **Complex File Locking:** Trying to build a perfect database-grade locking mechanism on a file system. **MVP Mitigation:** Use a simple OS-level file lock or the "Last Write Wins" warning.
+3. **Frontend Perfectionism:** Trying to make NiceGUI look exactly like a custom React app. **MVP Mitigation:** Accept the standard Material Design look that NiceGUI provides out of the box.
