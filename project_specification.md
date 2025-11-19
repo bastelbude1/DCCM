@@ -121,16 +121,60 @@ The system relies on **three distinct storage volumes (Mount Points)**. While th
 
 | Volume | Path (Example) | App Permission | Web Svr Permission | Contents |
 | :--- | :--- | :--- | :--- | :--- |
-| **Management Vol** | `/mnt/dccm/mgmt` | Read/Write | None | Templates (`.yaml`/`.json`), Metadata (`.meta.json`), `support_units.json` |
-| **Retrieval Vol** | `/mnt/dccm/public` | Read/Write | Read Only | Final `.json` / `.yaml` configs |
-| **Audit Vol** | `/mnt/dccm/audit` | Append Only | None | History logs |
+| **Management Vol** | `/mnt/dccm/mgmt` | Read/Write | None | Templates (`.yaml`/`.json`), Metadata (`.meta.json`), Environment registry, Lookup registry, Validation scripts registry |
+| **Retrieval Vol** | `/mnt/dccm/public` | Read/Write | Read Only | Final `.json` / `.yaml` configs organized by environment subdirectories |
+| **Audit Vol** | `/mnt/dccm/audit` | Append Only | None | History logs, validation history |
+
+**Retrieval Volume Structure (Environment Subdirectories):**
+```
+/mnt/dccm/public/
+├── dev/
+│   ├── my-service.json
+│   ├── api-gateway.json
+│   └── database-config.json
+├── test/
+│   ├── my-service.json
+│   ├── api-gateway.json
+│   └── database-config.json
+├── prod/
+│   ├── my-service.json
+│   ├── api-gateway.json
+│   └── database-config.json
+└── staging/      # Additional environments configured by admins
+    ├── my-service.json
+    └── api-gateway.json
+```
+
+**Management Volume Structure:**
+```
+/mnt/dccm/mgmt/
+├── templates/
+│   ├── my-service.yaml             # ONE template for ALL environments
+│   ├── my-service.meta.json        # Tracks all environment configs
+│   ├── api-gateway.yaml
+│   └── api-gateway.meta.json
+├── registries/
+│   ├── environments.json           # System-wide environment list
+│   ├── lookup_registry.json        # Lookup file mappings
+│   └── validation_scripts.json     # Validation script mappings
+├── lookups/
+│   ├── support_groups.txt
+│   ├── available_instances.txt
+│   └── aws_regions.txt
+└── .locks/
+    ├── my-service_dev.lock         # Per-environment locks
+    ├── my-service_test.lock
+    └── my-service_prod.lock
+```
 
 **Critical Constraints:**
 * Templates and metadata **must never** be accessible via the Retrieval Tier
-* The Retrieval Volume must **only** contain final configuration output files
+* The Retrieval Volume must **only** contain final configuration output files organized by environment
 * Audit trail must be on a completely separate volume with admin-only access
 * No cross-contamination between volumes
 * **App Permission "Append Only"** for Audit Volume ensures immutable audit trail
+* Each environment has its own subdirectory in Retrieval Volume for clean separation
+* **One template, multiple environment-specific configs**: A single template generates separate configuration files for each environment
 
 ### 2.3 Architecture Diagram
 
@@ -213,14 +257,15 @@ Owner → Upload Template → Validate → Store in Management FS
 
 **Configuration Creation Flow:**
 ```
-User → Select Template → Generate Form → Fill Values → Validate
-     → Write to Retrieval FS → Log in Audit FS
+User → Select Template → **SELECT ENVIRONMENT (MANDATORY)** → Generate Form
+     → Fill Values → Validate → Write to Retrieval FS/{env}/ → Log in Audit FS
 ```
 
 **Configuration Retrieval Flow:**
 ```
-App → HTTP GET request → Retrieval Tier → Read from Retrieval FS
-    → Return JSON/YAML
+Dev App   → HTTP GET /dev/my-service.json   → Retrieval Tier → Return JSON/YAML
+Test App  → HTTP GET /test/my-service.json  → Retrieval Tier → Return JSON/YAML
+Prod App  → HTTP GET /prod/my-service.json  → Retrieval Tier → Return JSON/YAML
 ```
 
 ### 2.5 Internal Architecture (Management Flow)
@@ -251,6 +296,118 @@ To initialize the system from a fresh install (Day 0):
 **Validation:**
 - If `DCCM_INITIAL_ADMIN` contains invalid characters (not a valid SSO username format), application refuses to start
 - Bootstrap action is idempotent: If admin already exists, skip creation
+
+### 2.7 Multi-Environment Architecture
+
+**Core Principle:** ONE template, MULTIPLE environment-specific configurations.
+
+**Problem Solved:** Enterprise systems need separate configurations for development, testing, and production environments. Creating separate templates (`my-service-dev`, `my-service-test`, `my-service-prod`) leads to duplication and drift.
+
+**DCCM Solution:** A single template (e.g., `my-service.yaml`) generates multiple environment-specific configuration files (e.g., `/dev/my-service.json`, `/test/my-service.json`, `/prod/my-service.json`).
+
+#### 2.7.1 Environment Registry
+
+Config Administrators manage a **system-wide environment registry** that defines available environments for ALL templates.
+
+**Registry Location:** `/mnt/dccm/mgmt/registries/environments.json`
+
+**Example Environment Registry:**
+```json
+{
+  "environments": [
+    {
+      "name": "dev",
+      "display_name": "Development",
+      "description": "Development environment for testing new features",
+      "order": 1
+    },
+    {
+      "name": "test",
+      "display_name": "Testing",
+      "description": "Integration testing environment",
+      "order": 2
+    },
+    {
+      "name": "staging",
+      "display_name": "Staging",
+      "description": "Pre-production staging environment",
+      "order": 3
+    },
+    {
+      "name": "prod",
+      "display_name": "Production",
+      "description": "Live production environment",
+      "order": 4
+    }
+  ]
+}
+```
+
+**Registry Management:**
+- Config Administrators can add, remove, or reorder environments
+- Environment `name` must be web-safe (lowercase alphanumeric, hyphens, underscores only)
+- Environment `name` is used in URLs and file paths (`/mnt/dccm/public/{name}/`)
+- Environment `display_name` is shown in UI
+- Environment `order` determines display order in UI (ascending)
+- Changes to registry affect ALL templates immediately
+
+**Default Bootstrap Environments:**
+- On first system startup, create default environments: `dev`, `test`, `prod`
+- Admins can customize after bootstrap
+
+#### 2.7.2 Environment Selection (Mandatory)
+
+When creating or editing a configuration, users **MUST** select an environment. There is no default value, and the selection cannot be skipped.
+
+**Critical Requirements:**
+- Environment is a **required field** (form validation prevents save without selection)
+- No default environment (user must explicitly choose)
+- Environment is stored in **metadata**, NOT in template or configuration file
+- Environment cannot be changed after creation (must copy to different environment instead)
+- Each environment gets its own configuration file in its subdirectory
+
+**UI Behavior:**
+- Radio button list showing all available environments
+- Visual warning for production environment: "⚠ You are configuring the PRODUCTION environment"
+- Environment selection is first field in form (cannot be missed)
+
+#### 2.7.3 Per-Environment Configuration Storage
+
+**File Location Pattern:**
+```
+/mnt/dccm/public/{environment}/{template-name}.{format}
+```
+
+**Examples:**
+- Dev config: `/mnt/dccm/public/dev/my-service.json`
+- Test config: `/mnt/dccm/public/test/my-service.json`
+- Prod config: `/mnt/dccm/public/prod/my-service.json`
+
+**Retrieval URLs:**
+- Dev: `http://config-host/dev/my-service.json`
+- Test: `http://config-host/test/my-service.json`
+- Prod: `http://config-host/prod/my-service.json`
+
+**Web Server Configuration:**
+- DocumentRoot: `/mnt/dccm/public/`
+- No special configuration needed - subdirectories work automatically
+- Standard static file serving
+
+#### 2.7.4 Per-Environment Operations
+
+**Independent Locking:**
+- Editing dev config does not lock test or prod
+- Lock files: `my-service_dev.lock`, `my-service_test.lock`, `my-service_prod.lock`
+
+**Independent Validation:**
+- Background validation runs separately for each environment
+- Dev validation failure does not trigger prod notifications
+- Each environment has its own validation history
+
+**Independent Audit:**
+- All audit log entries include environment field
+- Query audit trail by environment: "Show all prod changes"
+- Separate drift tracking per environment
 
 ---
 
