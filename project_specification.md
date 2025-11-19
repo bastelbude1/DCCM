@@ -54,6 +54,10 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
 ### 3.2 Configuration File Naming & Retrieval
 
 * **File Naming:** Files are saved using a **free text name** input provided by the Authorized User.
+  * Maximum length: **50 characters**
+  * Allowed characters: **Web-safe characters only** (alphanumeric, hyphens, underscores: `a-z`, `A-Z`, `0-9`, `-`, `_`)
+  * No spaces or special characters that require URL encoding (avoids `%20` in curl requests)
+  * The system must validate input and reject non-compliant names
 * **File Format:** The user specifies the desired output format (JSON or YAML). The file extension is automatically added based on the selected format.
 * **Collision Handling:** The NiceGUI application runs a check against the Shared Filesystem. If a file with the same name exists, the user is prompted to confirm **overwrite**.
 * **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[free-text-name].[json|yaml]`.

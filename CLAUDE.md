@@ -61,6 +61,11 @@ Access control is based on `SSO_USERNAME` environment variable:
 ### Configuration Naming & Collision Handling
 
 - Configurations are saved using free-text names provided by users
+- **Naming constraints:**
+  - Maximum 50 characters
+  - Web-safe characters only: `a-z`, `A-Z`, `0-9`, `-`, `_`
+  - No spaces or characters requiring URL encoding
+  - System must validate and reject non-compliant names
 - Users select the desired output format (JSON or YAML)
 - File extension is automatically added based on selected format
 - Before save, check shared filesystem for name collision
