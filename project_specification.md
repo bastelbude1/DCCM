@@ -488,16 +488,24 @@ support_teams:
 | Component | Technology | Rationale |
 | :--- | :--- | :--- |
 | **Management UI/Logic** | **NiceGUI / Python** | Single-language stack for rapid, dynamic UI generation and complex logic handling. |
+| **Validation Engine** | **Pydantic** | Dynamic model generation for robust, one-pass schema validation. Eliminates hand-coded validators. |
 | **Retrieval Server** | **Company Standard Web Server** | Highly efficient, high-performance static file serving using existing company infrastructure (e.g., Apache); simplest solution for external API access. |
 | **Identity Source** | `SSO_USERNAME` (Env Var) | Leverages existing identity infrastructure without complex integration. |
-| **Persistence** | Shared Filesystem | Simplest method for file persistence and direct consumption by the retrieval tier. |
-| **Data Format** | **JSON and YAML** | Both formats supported for template input and configuration output; user selects preferred format. |
+| **Persistence** | Three Storage Volumes | Management, Retrieval, and Audit volumes with distinct permissions for security isolation. |
+| **Template Format** | **JSON or YAML** | The parser must auto-detect and support both formats for template definition. Templates can be uploaded in either format. |
+| **Data Format** | **JSON and YAML** | Both formats supported for configuration output; user selects preferred format when saving. |
 
 ---
 
 ## 8. Configuration Template Example
 
 The following example demonstrates the Dynamic Form Builder capabilities using a microservice configuration template.
+
+**Note on Template Format:**
+- Templates can be uploaded in either **JSON** or **YAML** format
+- The system must auto-detect the format based on file extension (`.json`, `.yaml`, `.yml`) or content
+- The examples below use YAML for readability, but all templates can equivalently be written in JSON
+- Both formats produce identical form rendering and validation behavior
 
 ### 8.1 The Configuration Template (Input)
 
