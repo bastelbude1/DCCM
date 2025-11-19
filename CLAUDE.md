@@ -58,8 +58,6 @@ Access control is based on `SSO_USERNAME` environment variable:
 - **Authorized User (Editor)**: Granted access via Owner delegation (Support Unit lookup or manual list), can Update/Modify
 - **Config Administrator**: Explicitly assigned role with full control including deletion
 
-**Critical Constraint**: Block save operation if Owner attempts to delegate to a Support Unit they are a member of.
-
 ### Configuration Naming & Collision Handling
 
 - Configurations are saved using free-text names provided by users

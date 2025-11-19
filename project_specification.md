@@ -51,9 +51,6 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
 | **Authorized User (Editor)** | **Update/Modify** | Granted via Owner delegation (Support Unit lookup or Manual List). |
 | **Config Administrator** | **Full Control (Update + Delete)** | Explicitly assigned role; required for **removal/deletion** of any configuration. |
 
-**Constraint Validation:**
-* The system **must block the save operation** if the Owner attempts to delegate access to a **Support Unit** of which they are a member.
-
 ### 3.2 Configuration File Naming & Retrieval
 
 * **File Naming:** Files are saved using a **free text name** input provided by the Authorized User.
