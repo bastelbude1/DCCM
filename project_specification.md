@@ -439,16 +439,64 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
 Access control metadata (Owners, Editors, delegations) must be stored separately from configuration files:
 
 * **Storage Requirement**: Metadata must persist across system restarts and be queryable for authorization checks
-* **Metadata Content**: For each template/configuration, store:
+* **Metadata Content**: For each template, store:
   * List of Owner usernames (SSO_USERNAME values)
   * List of Authorized User (Editor) usernames or Support Unit references
   * Original uploader and upload timestamp
-  * Last modified by and timestamp
+  * **Per-environment configuration metadata**: Created by, created at, last modified by, last modified at, locked by
 * **Metadata Storage Implementation**: Use separate `.meta.json` files alongside each template
   * For template `my-service`, store metadata in `my-service.meta.json`
-  * Store in the **Management Volume** alongside templates
+  * Store in the **Management Volume** alongside templates: `/mnt/dccm/mgmt/templates/my-service.meta.json`
   * **Critical**: Never store in Retrieval Volume - metadata must not be accessible via HTTP
 * **Critical Constraint**: Metadata must **never** appear in configuration files served to consuming applications via the Retrieval Tier
+
+**Metadata Structure (Multi-Environment):**
+
+```json
+{
+  "template_name": "my-service",
+  "owners": ["alice.smith", "charlie.admin"],
+  "editors": ["bob.jones"],
+  "created_by": "alice.smith",
+  "created_at": "2025-11-20T10:00:00Z",
+  "template_last_modified_by": "alice.smith",
+  "template_last_modified_at": "2025-11-21T09:00:00Z",
+  "environments": {
+    "dev": {
+      "created_by": "alice.smith",
+      "created_at": "2025-11-20T10:00:00Z",
+      "last_modified_by": "bob.jones",
+      "last_modified_at": "2025-11-21T14:30:00Z",
+      "locked_by": null,
+      "locked_at": null
+    },
+    "test": {
+      "created_by": "alice.smith",
+      "created_at": "2025-11-20T10:15:00Z",
+      "last_modified_by": "alice.smith",
+      "last_modified_at": "2025-11-20T10:15:00Z",
+      "locked_by": null,
+      "locked_at": null
+    },
+    "prod": {
+      "created_by": "charlie.admin",
+      "created_at": "2025-11-20T11:00:00Z",
+      "last_modified_by": "charlie.admin",
+      "last_modified_at": "2025-11-20T11:00:00Z",
+      "locked_by": "charlie.admin",
+      "locked_at": "2025-11-21T16:00:00Z"
+    }
+  }
+}
+```
+
+**Key Points:**
+- **One metadata file per template** (not per environment)
+- `owners` and `editors` apply to **all environments** (template-level permission)
+- `environments` object tracks each environment's configuration metadata
+- If environment config doesn't exist yet, it won't have an entry in `environments` object
+- `locked_by` and `locked_at` enable per-environment exclusive locking
+- Template modifications (`template_last_modified_*`) are separate from config modifications (per-environment `last_modified_*`)
 
 ### 3.4 Audit Trail & History
 
@@ -472,6 +520,7 @@ The system must maintain a complete audit trail for compliance and troubleshooti
   * **What**: Complete snapshot of template/configuration before and after change
   * **When**: Precise timestamp (ISO 8601 format recommended)
   * **Which**: Template/configuration name and affected fields
+  * **Where** (NEW): Environment name (for configuration changes): `dev`, `test`, `prod`, etc.
 * **Restore Capability**:
   * Config Administrators must be able to restore any previous version of a template
   * Config Administrators must be able to restore any previous version of a configuration
@@ -480,7 +529,40 @@ The system must maintain a complete audit trail for compliance and troubleshooti
 * **Access Control for Audit Trail**:
   * Regular users (Owners, Editors): No access to audit trail
   * Config Administrators: Read access to audit trail, restore capability
-  * Audit trail queries should support filtering by: template name, username, date range
+  * Audit trail queries should support filtering by: template name, username, date range, **environment**
+
+**Audit Log Entry Example (Multi-Environment):**
+
+```json
+{
+  "timestamp": "2025-11-21T14:30:15Z",
+  "action": "configuration_updated",
+  "template_name": "my-service",
+  "environment": "prod",
+  "user": "charlie.admin",
+  "changes": {
+    "service_timeout_ms": {
+      "old": 3000,
+      "new": 5000
+    }
+  },
+  "config_before": {
+    "service_timeout_ms": 3000,
+    "debug_log_level": "INFO"
+  },
+  "config_after": {
+    "service_timeout_ms": 5000,
+    "debug_log_level": "INFO"
+  }
+}
+```
+
+**Additional Audit Actions for Multi-Environment:**
+
+- `configuration_created`: User created new environment config (includes `environment` field)
+- `configuration_updated`: User modified environment config (includes `environment` field)
+- `configuration_copied`: User copied config from one environment to another (includes `source_environment` and `destination_environment`)
+- `template_updated`: User modified template (no `environment` field - affects all environments)
 
 ---
 
