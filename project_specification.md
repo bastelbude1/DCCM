@@ -66,7 +66,7 @@ Access control metadata (Owners, Editors, delegations) must be stored separately
   * List of Authorized User (Editor) usernames or Support Unit references
   * Original uploader and upload timestamp
   * Last modified by and timestamp
-* **Implementation Decision**: The apprentice must choose an appropriate storage mechanism:
+* **Implementation Decision**: The developer must choose an appropriate storage mechanism:
   * Option A: Separate `.meta.json` files alongside each template
   * Option B: Centralized metadata database or file
   * Option C: Extended file attributes (xattr) if filesystem supports it

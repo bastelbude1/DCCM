@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **IMPORTANT**: This repository contains a **specification document** for the Dynamic Central Configuration Manager (DCCM) project. Our role is as the **customer/requirements owner**, not the implementer.
 
-The specification serves as the baseline for an apprentice's final practice exam. The apprentice will decide how to implement the requirements based on the specification provided in `project_specification.md`.
+The specification serves as the baseline for a developer's final practice exam. The developer will decide how to implement the requirements based on the specification provided in `project_specification.md`.
 
 When working in this repository:
 - Focus on **refining and clarifying requirements** from a customer perspective
