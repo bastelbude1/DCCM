@@ -16,6 +16,11 @@
    - 2.4 [Data Flow](#24-data-flow)
    - 2.5 [Internal Architecture (Management Flow)](#25-internal-architecture-management-flow)
    - 2.6 [System Bootstrap & Initial Access](#26-system-bootstrap--initial-access)
+   - 2.7 [Multi-Environment Architecture](#27-multi-environment-architecture)
+     - 2.7.1 [Environment Registry](#271-environment-registry)
+     - 2.7.2 [Environment Selection (Mandatory)](#272-environment-selection-mandatory)
+     - 2.7.3 [Per-Environment Configuration Storage](#273-per-environment-configuration-storage)
+     - 2.7.4 [Per-Environment Operations](#274-per-environment-operations)
 3. [Access Control](#3-access-control)
    - 3.1 [Owner-Centric Role-Based Access Control (RBAC)](#31-owner-centric-role-based-access-control-rbac)
    - 3.2 [Permission Matrix](#32-permission-matrix)
@@ -38,6 +43,10 @@
      - 5.6.6 [Validation History & Audit Trail](#566-validation-history--audit-trail)
      - 5.6.7 [Config Administrator Escalation](#567-config-administrator-escalation)
      - 5.6.8 [Implementation Considerations](#568-implementation-considerations)
+   - 5.7 [Multi-Environment Management](#57-multi-environment-management)
+     - 5.7.1 [Environment Selection UI (Mandatory)](#571-environment-selection-ui-mandatory)
+     - 5.7.2 [Copy/Promote Configuration Between Environments](#572-copypromote-configuration-between-environments)
+     - 5.7.3 [Template List with Multi-Environment Status](#573-template-list-with-multi-environment-status)
 6. [Implementation Logic: The Dynamic Form Builder](#6-implementation-logic-the-dynamic-form-builder)
    - 6.1 [Form Field Types & Validation Strategy](#61-form-field-types--validation-strategy)
 7. [Technology Stack](#7-technology-stack)
@@ -569,6 +578,9 @@ The system must maintain a complete audit trail for compliance and troubleshooti
 ## 4. Template Upload & Validation
 
 * **Template Upload:** Users upload a JSON or YAML template file that defines the configuration schema and form structure.
+  * **Important:** Uploading a template does NOT create any configuration files
+  * Template defines the schema; configurations are created separately for each environment
+  * After upload, owners must explicitly create configurations for desired environments (dev, test, prod, etc.)
 * **Template Validation:** Before accepting the template, the system must perform comprehensive validation:
   * Verify valid JSON or YAML syntax
   * Check that all schema keywords are recognized (`min`, `max`, `regex`, `options`, `lookup_file`, `separator`, `multi_select`, `validate_script`, etc.)
@@ -698,6 +710,22 @@ The system must maintain a complete audit trail for compliance and troubleshooti
     - Admins ensure scripts are installed, executable, and return correct exit codes
     - Admins set appropriate timeouts based on script performance
     - System should provide UI to test validation scripts (Config Administrators only)
+
+* **Environment Registry (System-Wide Configuration):**
+  * **Purpose:** Defines available environments for ALL templates (dev, test, staging, prod, etc.)
+  * **Registry Location:** `/mnt/dccm/mgmt/registries/environments.json`
+  * **Structure:** See Section 2.7.1 for complete details
+  * **Management:** Config Administrators can add, remove, or reorder environments
+  * **Validation:**
+    - Environment names must be web-safe (lowercase alphanumeric, hyphens, underscores only)
+    - Environment names must be unique
+    - At least one environment must be defined
+  * **Bootstrap:** On first startup, create default environments: `dev`, `test`, `prod`
+  * **Impact:** Changes to environment registry affect all templates immediately
+    - Adding environment: New environment appears in dropdown for all templates
+    - Removing environment: Confirm no configurations exist for that environment before removal
+    - Renaming environment: Not supported (must create new and migrate configs manually)
+
 * **Error Handling During Template Validation:**
   * **Invalid JSON/YAML syntax**: Display syntax error with line number
   * **Unrecognized schema keyword**: List all unrecognized keywords
@@ -757,20 +785,35 @@ When an Owner or Config Administrator updates an existing template:
 
 ### 5.3 Configuration File Naming & Retrieval
 
-* **Configuration Naming:** The configuration filename is **derived from the template name** - users cannot choose a different name.
-  * When a template is uploaded with name `my-service`, configurations generated from it will be named `my-service.[json|yaml]`
+* **Configuration Naming (Multi-Environment):** The configuration filename is **derived from the template name** - users cannot choose a different name.
+  * Template name: `my-service`
+  * Dev config: `/mnt/dccm/public/dev/my-service.json`
+  * Test config: `/mnt/dccm/public/test/my-service.json`
+  * Prod config: `/mnt/dccm/public/prod/my-service.json`
+  * Environment is determined by **mandatory user selection during creation**, NOT by filename
 * **File Format:** The user specifies the desired output format (JSON or YAML). The file extension is automatically added based on the selected format.
-* **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[template-name].[json|yaml]`.
+* **Retrieval (Environment-Specific URLs):** Consuming applications fetch the file from environment-specific subdirectories:
+  * Dev application: `curl http://config-host/dev/my-service.json`
+  * Test application: `curl http://config-host/test/my-service.json`
+  * Prod application: `curl http://config-host/prod/my-service.json`
+* **Application Configuration:**
+  * Each application environment must be configured with the correct base URL
+  * Dev app: `CONFIG_BASE_URL=http://config-host/dev/`
+  * Test app: `CONFIG_BASE_URL=http://config-host/test/`
+  * Prod app: `CONFIG_BASE_URL=http://config-host/prod/`
+  * Applications append template name to base URL: `${CONFIG_BASE_URL}my-service.json`
 
 ### 5.4 User Operations
 
 The UI must support these distinct operations:
 
-1. **Upload Template** (Owners/Admins only): Upload/update template schema
-2. **Create Configuration** (Owners/Editors): Fill out form to create initial configuration file
-3. **Edit Configuration** (Owners/Editors): Modify existing configuration values
-4. **View Template** (Owners/Editors): View the current template schema (read-only for Editors)
-5. **Delete Template/Configuration** (Admins only): Remove template and associated configuration
+1. **Upload Template** (Owners/Admins only): Upload/update template schema (affects all environments)
+2. **Create Configuration for Environment** (Owners/Editors): Select environment (mandatory), fill out form to create initial configuration file for that environment
+3. **Edit Configuration for Environment** (Owners/Editors): Select environment, modify existing configuration values for that specific environment
+4. **Copy Configuration Between Environments** (Owners/Editors): Copy config from source environment to destination environment (see Section 5.7.2)
+5. **View Template** (Owners/Editors): View the current template schema (read-only for Editors)
+6. **Delete Template** (Admins only): Remove template and ALL associated configurations across ALL environments
+7. **Delete Environment Configuration** (Admins only): Remove configuration for specific environment only
 
 ### 5.5 Error Handling During Configuration Creation/Editing
 
@@ -843,6 +886,10 @@ When an Owner or Editor opens a configuration with now-invalid values:
 **Implementation:**
 - Run daily validation scan (recommended: 02:00 AM)
 - Validate ALL configurations against their current templates
+- **Per-Environment Validation:** Validate each environment's configuration separately
+  - Dev config validated independently from test and prod
+  - Each environment has its own validation history
+  - Failures in one environment don't affect notifications for other environments
 - Track validation history to distinguish persistent failures from transient issues
 - Send notifications only for persistent failures (3+ consecutive days)
 
@@ -893,12 +940,13 @@ For each configuration:
 
 **Email Template:**
 ```
-Subject: [DCCM] Action Required: Configuration "my-service" has invalid values
+Subject: [DCCM] Action Required: Configuration "my-service" (prod) has invalid values
 
 Hi Alice Smith, Charlie Admin (Owners of "my-service"),
 
-Your configuration "my-service" has values that are no longer valid
-according to the current template. This has been detected for 3 consecutive days.
+Your configuration "my-service" in the PRODUCTION environment has values
+that are no longer valid according to the current template. This has been
+detected for 3 consecutive days.
 
 INVALID FIELDS:
 ┌────────────────────────────────────────────────────────────────┐
@@ -912,14 +960,18 @@ INVALID FIELDS:
 └────────────────────────────────────────────────────────────────┘
 
 NEXT STEPS:
-1. Click here to edit configuration: https://dccm.company.com/edit/my-service
+1. Click here to edit configuration: https://dccm.company.com/edit/my-service?env=prod
 2. Update the invalid field(s)
 3. Save the configuration
 
 This notification will repeat weekly until resolved.
 
+Environment: prod
 Last successful validation: 2025-11-17 (4 days ago)
 Configuration last modified: 2025-10-01 by alice.smith
+
+NOTE: Other environments (dev, test) may have different values and are
+validated separately. This notification is specific to the prod environment.
 
 ---
 Questions? Contact Config Administrators or reply to this email.
@@ -1009,11 +1061,12 @@ Questions? Reply to this email or contact the Config Administrator.
   - Failed fields and reasons
   - Notification sent (yes/no, timestamp)
 
-**Log Entry Format:**
+**Log Entry Format (Per-Environment):**
 ```json
 {
   "timestamp": "2025-11-20T02:00:15Z",
   "config_name": "my-service",
+  "environment": "prod",
   "validation_status": "failed",
   "failed_fields": [
     {
@@ -1029,18 +1082,22 @@ Questions? Reply to this email or contact the Config Administrator.
 }
 ```
 
+**Key Point:** Each environment's validation history is tracked separately. Dev failure doesn't increment prod's consecutive_failures counter.
+
 #### 5.6.7 Config Administrator Escalation
 
 After 4 weeks of notifications without resolution, escalate to Config Administrator:
 
 **Escalation Email:**
 ```
-Subject: [DCCM Admin] Stale Configuration: "my-service" (invalid for 28 days)
+Subject: [DCCM Admin] Stale Configuration: "my-service" (prod) invalid for 28 days
 
-Configuration "my-service" has had invalid values for 28 days despite
-4 owner notifications.
+Configuration "my-service" in the PRODUCTION environment has had invalid
+values for 28 days despite 4 owner notifications.
 
 DETAILS:
+- Template: my-service
+- Environment: prod
 - Owners: alice.smith, charlie.admin
 - Invalid Field: support_team
 - Current Value: "DevOps-Legacy" (not in approved list)
@@ -1048,14 +1105,20 @@ DETAILS:
 - First Detected: 2025-10-30
 - Notifications Sent: 4 (last: 2025-11-24)
 
+ENVIRONMENT STATUS:
+- dev: Valid (last validated: 2025-11-25)
+- test: Valid (last validated: 2025-11-25)
+- prod: INVALID (consecutive failures: 28 days)
+
 RECOMMENDED ACTIONS:
 1. Contact owners directly to resolve
 2. If configuration is no longer used, delete it
 3. If value should be re-added to lookup, update lookup file
 4. If urgent, fix configuration on behalf of owners (logged in audit trail)
+5. Consider copying from dev or test if those are valid
 
-View configuration: https://dccm.company.com/admin/view/my-service
-Validation history: https://dccm.company.com/admin/audit/my-service
+View configuration: https://dccm.company.com/admin/view/my-service?env=prod
+Validation history: https://dccm.company.com/admin/audit/my-service?env=prod
 ```
 
 **Admin Actions:**
@@ -1100,6 +1163,167 @@ When Config Administrator removes a lookup value, store migration hint in metada
 ```
 
 This hint is displayed to owners when they encounter the invalid value.
+
+### 5.7 Multi-Environment Management
+
+This section describes operations specific to managing configurations across multiple environments.
+
+#### 5.7.1 Environment Selection UI (Mandatory)
+
+When creating or editing a configuration, environment selection is the **first required field** in the form.
+
+**UI Requirements:**
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ Create Configuration: my-service                 User: alice.smith │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  Environment * (Required - Select Target Environment)              │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │                                                              │  │
+│  │  ○ dev         Development                                   │  │
+│  │                Development environment for testing           │  │
+│  │                                                              │  │
+│  │  ○ test        Testing                                       │  │
+│  │                Integration testing environment               │  │
+│  │                                                              │  │
+│  │  ○ staging     Staging                                       │  │
+│  │                Pre-production staging environment            │  │
+│  │                                                              │  │
+│  │  ○ prod        Production                                    │  │
+│  │                Live production environment                   │  │
+│  │                                                              │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  [Continue to Configuration Form]                                  │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Validation Rules:**
+- Environment field is **required** - form cannot proceed without selection
+- No default value - user must explicitly click a radio button
+- Visual warning if `prod` is selected: "⚠ You are configuring the PRODUCTION environment"
+- Once created, environment cannot be changed (must copy to different environment instead)
+
+**When Editing Existing Configuration:**
+- Environment is pre-selected and **read-only** (displayed at top of form)
+- User cannot change environment during edit
+- To move config to different environment, must use Copy operation (see 5.7.2)
+
+#### 5.7.2 Copy/Promote Configuration Between Environments
+
+Owners and Editors can copy configurations from one environment to another (e.g., promote dev → test → prod).
+
+**Copy Operation UI:**
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ Copy Configuration: my-service                   User: alice.smith │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  Source Environment: *                                             │
+│  ● dev       (Last modified: 2025-11-21 14:30 by bob.jones)        │
+│  ○ test      (Last modified: 2025-11-20 10:15 by alice.smith)      │
+│  ○ staging   (Not yet configured)                                  │
+│  ○ prod      (Last modified: 2025-11-20 11:00 by charlie.admin)    │
+│                                                                    │
+│  Destination Environment: *                                        │
+│  ○ dev                                                             │
+│  ● test      (Last modified: 2025-11-20 10:15 by alice.smith)      │
+│  ○ staging   (Not yet configured)                                  │
+│  ○ prod      (Last modified: 2025-11-20 11:00 by charlie.admin)    │
+│                                                                    │
+│  ⚠ WARNING: This will OVERWRITE the existing test configuration    │
+│                                                                    │
+│  Current values in test will be replaced with values from dev.     │
+│  This action is logged in the audit trail.                         │
+│                                                                    │
+│  [Cancel]                              [Copy dev → test]           │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Copy Operation Behavior:**
+- Select source environment (which config to copy FROM)
+- Select destination environment (which config to copy TO)
+- If destination already has a config, show warning about overwrite
+- If destination is empty, show info: "This will create a new configuration in test"
+- Copy operation creates audit log entry with both source and destination
+- User who performs copy becomes the `last_modified_by` for destination environment
+
+**Audit Log Entry for Copy:**
+```json
+{
+  "timestamp": "2025-11-21T15:00:00Z",
+  "action": "configuration_copied",
+  "template_name": "my-service",
+  "source_environment": "dev",
+  "destination_environment": "test",
+  "user": "alice.smith",
+  "overwrite": true
+}
+```
+
+**Access Control:**
+- Owners and Editors can copy between ANY environments
+- Copy operation respects template-level permissions (must be Owner or Editor)
+- No environment-specific copy restrictions (trusted users)
+
+#### 5.7.3 Template List with Multi-Environment Status
+
+The main dashboard shows status of each environment for each template.
+
+**Template List UI:**
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ DCCM - Configuration Manager              User: alice.smith        │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  Templates                                    [+ Upload Template]  │
+│  ────────────────────────────────────────────────────────────────  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ my-service                                      Owner        │  │
+│  │ Production microservice configuration                        │  │
+│  │                                                              │  │
+│  │ Environments:                                                │  │
+│  │   ✓ dev    Last modified: 2025-11-21 14:30 (bob.jones)      │  │
+│  │   ✓ test   Last modified: 2025-11-20 10:15 (alice.smith)    │  │
+│  │   ⚠ staging  Not yet configured                             │  │
+│  │   ✓ prod   Last modified: 2025-11-20 11:00 (charlie.admin)  │  │
+│  │            🔒 Currently locked by charlie.admin               │  │
+│  │                                                              │  │
+│  │ [Edit dev] [Edit test] [Create staging] [Edit prod]         │  │
+│  │ [Copy Between Environments] [Manage Access]                 │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │ api-gateway                                     Owner        │  │
+│  │ API Gateway configuration                                    │  │
+│  │                                                              │  │
+│  │ Environments:                                                │  │
+│  │   ✓ dev    Last modified: 2025-11-19 16:00 (alice.smith)    │  │
+│  │   ⚠ test     Not yet configured                             │  │
+│  │   ⚠ staging  Not yet configured                             │  │
+│  │   ✓ prod   Last modified: 2025-11-18 09:00 (charlie.admin)  │  │
+│  │                                                              │  │
+│  │ [Edit dev] [Create test] [Create staging] [Edit prod]       │  │
+│  │ [Copy Between Environments] [Manage Access]                 │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Status Indicators:**
+- ✓ Environment configured (show last modified info)
+- ⚠ Not yet configured
+- 🔒 Currently locked by user (editing in progress)
+
+**Action Buttons:**
+- **Edit {env}**: Opens edit form for that environment (if config exists)
+- **Create {env}**: Opens create form for that environment (if config doesn't exist)
+- **Copy Between Environments**: Opens copy UI
+- **Manage Access**: Opens permission management (same permissions for all environments)
 
 ---
 
@@ -1888,14 +2112,16 @@ Display a **non-blocking warning banner** at the top of the configuration form:
 
 #### 10.2.1 The "Last Write Wins" Problem
 
-**Scenario:**
-1. **09:00 AM:** Alice opens `/edit/my-service` (config has `timeout: 3000`)
-2. **09:00 AM:** Bob opens `/edit/my-service` (config has `timeout: 3000`)
+**Scenario (Single Environment):**
+1. **09:00 AM:** Alice opens `/edit/my-service?env=prod` (config has `timeout: 3000`)
+2. **09:00 AM:** Bob opens `/edit/my-service?env=prod` (config has `timeout: 3000`)
 3. **09:05 AM:** Alice changes `timeout` to `5000` and saves
 4. **09:06 AM:** Bob changes `timeout` to `8000` and saves (he never saw Alice's change)
 5. **Result:** Final config has `timeout: 8000` - Alice's change is **silently lost**
 
 **Problem:** Without concurrency control, the last person to click "Save" wins, and intermediate changes are lost without warning.
+
+**Multi-Environment Consideration:** This problem occurs PER ENVIRONMENT. Alice editing prod doesn't conflict with Bob editing dev.
 
 #### 10.2.2 Required Solution: Exclusive Locking
 
@@ -1905,21 +2131,24 @@ To prevent data loss, the system **must** implement exclusive locking:
 
 When a user opens a configuration for editing:
 
-1. **Acquire Lock:**
+1. **Acquire Lock (Per-Environment):**
    ```python
-   lock_file = f"management_fs/.locks/my-service.lock"
+   # Lock is PER ENVIRONMENT - not template-wide
+   lock_file = f"management_fs/.locks/{template_name}_{environment}.lock"
+   # Example: management_fs/.locks/my-service_prod.lock
 
    # Try to create lock file with current user and timestamp
    if lock_exists(lock_file):
        lock_info = read_lock(lock_file)
-       return f"Configuration is locked by {lock_info['user']} since {lock_info['timestamp']}"
+       return f"Configuration ({environment}) is locked by {lock_info['user']} since {lock_info['timestamp']}"
 
-   create_lock(lock_file, {"user": SSO_USERNAME, "timestamp": now()})
+   create_lock(lock_file, {"user": SSO_USERNAME, "timestamp": now(), "environment": environment})
    ```
 
 2. **Display Lock Status:**
-   - Show banner: "You have exclusive edit access. Lock acquired at 09:00 AM."
-   - Other users see: "This configuration is locked by Alice (editing since 09:00 AM). Try again later."
+   - Show banner: "You have exclusive edit access to the PROD environment. Lock acquired at 09:00 AM."
+   - Other users see: "The PROD configuration is locked by Alice (editing since 09:00 AM). Try again later."
+   - **Important:** Dev and test configs remain editable by other users
 
 3. **Release Lock:**
    - On Save: Release lock automatically
@@ -1929,22 +2158,32 @@ When a user opens a configuration for editing:
 
 4. **Lock Timeout & Override:**
    - Config Administrators can forcefully break locks if user's session crashed
-   - Log lock breaks in audit trail
+   - Log lock breaks in audit trail (include environment in log entry)
 
 **Implementation Notes:**
 
-**Lock File Location:**
-- Store in Management Volume: `management_fs/.locks/[template-name].lock`
+**Lock File Naming Convention (Per-Environment):**
+- Store in Management Volume: `management_fs/.locks/{template-name}_{environment}.lock`
 - Do NOT store in Retrieval Volume (locks are internal metadata)
+- Examples:
+  - `/mnt/dccm/mgmt/.locks/my-service_dev.lock`
+  - `/mnt/dccm/mgmt/.locks/my-service_test.lock`
+  - `/mnt/dccm/mgmt/.locks/my-service_prod.lock`
 
 **Lock File Content:**
 ```json
 {
   "locked_by": "alice.smith",
   "locked_at": "2025-11-19T09:00:15Z",
-  "session_id": "abc123"
+  "session_id": "abc123",
+  "environment": "prod"
 }
 ```
+
+**Key Behavior:**
+- Alice editing `my-service` (prod) does NOT block Bob from editing `my-service` (dev)
+- Lock is environment-specific, not template-specific
+- Each environment can be edited independently and concurrently by different users
 
 **Lock Cleanup:**
 - Implement background job to release locks older than 15 minutes
