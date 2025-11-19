@@ -63,9 +63,11 @@ Access control is based on `SSO_USERNAME` environment variable:
 ### Configuration Naming & Collision Handling
 
 - Configurations are saved using free-text names provided by users
+- Users select the desired output format (JSON or YAML)
+- File extension is automatically added based on selected format
 - Before save, check shared filesystem for name collision
 - If collision exists, prompt user to confirm overwrite
-- Final files are served at predictable URLs: `http://[config-host]/[free-text-name].json`
+- Final files are served at predictable URLs: `http://[config-host]/[free-text-name].[json|yaml]`
 
 ## Template Structure Example
 
@@ -108,10 +110,12 @@ Maintain clear separation between the three core modules (Identity/Authorization
 
 ### Form Generator Recursion
 
-The form builder must handle nested structures recursively. Each field in the template should be parsed to determine:
+The form builder must handle nested structures recursively. Each field in the template (JSON or YAML) should be parsed to determine:
 1. What UI component to render (type inference + explicit keywords)
 2. What validation rules to apply
 3. Whether to include in final output or treat as metadata
+
+The same form can generate output in either JSON or YAML format based on user selection.
 
 ### Metadata Storage
 
@@ -134,5 +138,5 @@ The system relies on `SSO_USERNAME` environment variable being set by upstream a
 - **Backend Framework**: Python with NiceGUI for dynamic UI generation
 - **Retrieval Server**: Company standard web server solution (e.g., Apache) for static file serving - final definition to be determined by company infrastructure
 - **Identity Source**: `SSO_USERNAME` environment variable
-- **Data Format**: YAML for templates (readability), JSON for output configurations
+- **Data Format**: Both JSON and YAML supported for template input and configuration output; user selects preferred format
 - **Persistence**: Shared filesystem between Management and Retrieval tiers

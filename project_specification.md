@@ -12,7 +12,7 @@ This document is tailored for IT Managers, emphasizing governance, simplicity, a
 
 ## 1. Executive Summary
 
-The **Dynamic Central Configuration Manager (DCCM)** is a simplified, unified configuration platform designed to eliminate manual configuration errors and enhance governance. Its core value lies in its **Template-First** approach: uploading a JSON/YAML schema automatically generates a user-friendly form.
+The **Dynamic Central Configuration Manager (DCCM)** is a simplified, unified configuration platform designed to eliminate manual configuration errors and enhance governance. Its core value lies in its **Template-First** approach: uploading a JSON or YAML schema automatically generates a user-friendly form.
 
 The system utilizes a two-tier architecture for optimal performance:
 1.  **Management Tier (NiceGUI):** Handles complex validation and write operations.
@@ -57,14 +57,15 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
 ### 3.2 Configuration File Naming & Retrieval
 
 * **File Naming:** Files are saved using a **free text name** input provided by the Authorized User.
+* **File Format:** The user specifies the desired output format (JSON or YAML). The file extension is automatically added based on the selected format.
 * **Collision Handling:** The NiceGUI application runs a check against the Shared Filesystem. If a file with the same name exists, the user is prompted to confirm **overwrite**.
-* **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[free-text-name].json`.
+* **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[free-text-name].[json|yaml]`.
 
 ---
 
 ## 4. Implementation Logic: The Dynamic Form Builder
 
-The core logic is the recursive parser that allows configuration structure and validation to be defined entirely within the YAML/JSON template.
+The core logic is the recursive parser that allows configuration structure and validation to be defined entirely within the JSON or YAML template.
 
 ### 4.1 Advanced Validation Strategy
 
@@ -89,6 +90,7 @@ The form generation and validation rely on two strategies:
 | **Retrieval Server** | **Company Standard Web Server** | Highly efficient, high-performance static file serving using existing company infrastructure (e.g., Apache); simplest solution for external API access. |
 | **Identity Source** | `SSO_USERNAME` (Env Var) | Leverages existing identity infrastructure without complex integration. |
 | **Persistence** | Shared Filesystem | Simplest method for file persistence and direct consumption by the retrieval tier. |
+| **Data Format** | **JSON and YAML** | Both formats supported for template input and configuration output; user selects preferred format. |
 
 That's a great request. To demonstrate the power of the **Dynamic Form Builder**, I'll provide an example of a **YAML template** that defines both a standard configuration structure *and* the advanced validation rules discussed.
 
@@ -162,8 +164,9 @@ When an Administrator uploads the template above, the **NiceGUI Management Tier*
 
 ## 3\. The Final Saved Configuration (Output)
 
-Once the user fills out the generated form and saves it, the DCCM writes a clean, validated JSON file to the Retrieval Tier.
+Once the user fills out the generated form and saves it, the DCCM writes a clean, validated configuration file to the Retrieval Tier in the user's selected format (JSON or YAML).
 
+**Example JSON Output:**
 ```json
 {
   "service_timeout_ms": 5000,
@@ -171,6 +174,14 @@ Once the user fills out the generated form and saves it, the DCCM writes a clean
   "region_deployment": "EU-CENTRAL-1",
   "database_instance": "DB-Production-Alpha"
 }
+```
+
+**Example YAML Output:**
+```yaml
+service_timeout_ms: 5000
+debug_log_level: WARN
+region_deployment: EU-CENTRAL-1
+database_instance: DB-Production-Alpha
 ```
 
 *(The owner and support unit information is saved as separate metadata associated with this file, not in the final configuration payload.)
