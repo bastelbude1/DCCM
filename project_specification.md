@@ -58,11 +58,27 @@
 
 ## 1. Executive Summary
 
-The **Dynamic Central Configuration Manager (DCCM)** is a simplified, unified configuration platform designed to eliminate manual configuration errors and enhance governance. Its core value lies in its **Template-First** approach: uploading a JSON or YAML schema automatically generates a user-friendly form.
+The **Dynamic Central Configuration Manager (DCCM)** is a simplified, unified configuration platform designed to eliminate manual configuration errors and enhance governance through centralized management with decentralized consumption.
+
+### Key Benefits
+
+**Centralized Configuration, Decentralized Consumption:**
+- Multiple users can update configurations at a **single central location**
+- Configurations are consumed **decentrally** by many servers and applications via simple HTTP GET requests
+- **Complete transparency:** All authorized users and applications can read the latest configurations
+- **Eliminates configuration drift:** No need to copy configuration files across servers and keep them in sync
+- **Single source of truth:** Updates are immediately available to all consuming applications
+
+**Template-First Approach:**
+- Uploading a JSON or YAML schema **automatically generates a user-friendly form**
+- No manual form building required
+- Validation rules defined once in the template, enforced consistently
+
+### Architecture
 
 The system utilizes a two-tier architecture for optimal performance:
-1.  **Management Tier (NiceGUI):** Handles complex validation and write operations.
-2.  **Retrieval Tier (Company Web Server):** Handles simple, high-speed read operations via static file serving using the company's standard web server solution (e.g., Apache).
+1.  **Management Tier (NiceGUI):** Handles complex validation and write operations at the central location.
+2.  **Retrieval Tier (Company Web Server):** Handles simple, high-speed read operations via static file serving, enabling decentralized consumption by any application with HTTP access.
 
 ---
 
