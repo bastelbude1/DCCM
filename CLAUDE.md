@@ -26,7 +26,7 @@ The system consists of two loosely coupled components communicating via a shared
 
 1. **Management Tier (NiceGUI/Python)**: Handles write operations, complex validation, RBAC, and dynamic form generation. Accessed by administrators and editors.
 
-2. **Retrieval Tier (Apache/Nginx)**: Serves validated configuration files as static content via HTTP GET. Accessed by consuming applications at `http://[config-host]/[filename].json`.
+2. **Retrieval Tier (Company Web Server)**: Serves validated configuration files as static content via HTTP GET using the company's standard web server solution. Accessed by consuming applications at `http://[config-host]/[filename].json`.
 
 ### Management Flow (Sequential Processing)
 
@@ -132,7 +132,7 @@ The system relies on `SSO_USERNAME` environment variable being set by upstream a
 ## Technology Stack
 
 - **Backend Framework**: Python with NiceGUI for dynamic UI generation
-- **Retrieval Server**: Apache or Nginx for static file serving
+- **Retrieval Server**: Company standard web server solution (e.g., Apache) for static file serving - final definition to be determined by company infrastructure
 - **Identity Source**: `SSO_USERNAME` environment variable
 - **Data Format**: YAML for templates (readability), JSON for output configurations
 - **Persistence**: Shared filesystem between Management and Retrieval tiers

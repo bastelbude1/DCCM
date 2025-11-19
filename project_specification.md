@@ -16,7 +16,7 @@ The **Dynamic Central Configuration Manager (DCCM)** is a simplified, unified co
 
 The system utilizes a two-tier architecture for optimal performance:
 1.  **Management Tier (NiceGUI):** Handles complex validation and write operations.
-2.  **Retrieval Tier (Apache/Nginx):** Handles simple, high-speed read operations via static file serving.
+2.  **Retrieval Tier (Company Web Server):** Handles simple, high-speed read operations via static file serving using the company's standard web server solution (e.g., Apache).
 
 ---
 
@@ -27,7 +27,7 @@ The system is split into two functionally distinct, loosely coupled components t
 ### 2.1 Component Separation 
 
 * **Management Tier (Write):** A single Python application running **NiceGUI**. This tier is accessed by administrators and editors and hosts the complex logic (RBAC, Validation, Form Generation).
-* **Retrieval Tier (Read):** A standard, high-performance web server (Apache/Nginx). This tier provides applications with high-speed, **read-only** access to the configuration files via standard HTTP GET requests.
+* **Retrieval Tier (Read):** A standard, high-performance web server provided by the company (e.g., Apache). This tier provides applications with high-speed, **read-only** access to the configuration files via standard HTTP GET requests.
 
 ### 2.2 Simplified Internal Architecture (Management Flow)
 
@@ -86,7 +86,7 @@ The form generation and validation rely on two strategies:
 | Component | Technology | Rationale |
 | :--- | :--- | :--- |
 | **Management UI/Logic** | **NiceGUI / Python** | Single-language stack for rapid, dynamic UI generation and complex logic handling. |
-| **Retrieval Server** | **Apache / Nginx** | Highly efficient, high-performance static file serving; simplest solution for external API access. |
+| **Retrieval Server** | **Company Standard Web Server** | Highly efficient, high-performance static file serving using existing company infrastructure (e.g., Apache); simplest solution for external API access. |
 | **Identity Source** | `SSO_USERNAME` (Env Var) | Leverages existing identity infrastructure without complex integration. |
 | **Persistence** | Shared Filesystem | Simplest method for file persistence and direct consumption by the retrieval tier. |
 
