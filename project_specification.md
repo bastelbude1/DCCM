@@ -11,10 +11,11 @@
 1. [Executive Summary](#1-executive-summary)
 2. [Architecture Overview: Two-Tier Model](#2-architecture-overview-two-tier-model)
    - 2.1 [Component Separation](#21-component-separation)
-   - 2.2 [Filesystem Separation (Critical Security Requirement)](#22-filesystem-separation-critical-security-requirement)
+   - 2.2 [Storage Architecture (Filesystem Separation)](#22-storage-architecture-filesystem-separation)
    - 2.3 [Architecture Diagram](#23-architecture-diagram)
    - 2.4 [Data Flow](#24-data-flow)
    - 2.5 [Internal Architecture (Management Flow)](#25-internal-architecture-management-flow)
+   - 2.6 [System Bootstrap & Initial Access](#26-system-bootstrap--initial-access)
 3. [Access Control](#3-access-control)
    - 3.1 [Owner-Centric Role-Based Access Control (RBAC)](#31-owner-centric-role-based-access-control-rbac)
    - 3.2 [Permission Matrix](#32-permission-matrix)
@@ -67,28 +68,29 @@ The system utilizes a two-tier architecture for optimal performance:
 
 ## 2. Architecture Overview: Two-Tier Model
 
-The system is split into two functionally distinct, loosely coupled components that interact via a **Shared Filesystem**.
+The system is split into two functionally distinct, loosely coupled components that interact via **separate storage volumes**.
 
 ### 2.1 Component Separation
 
 * **Management Tier (Write):** A single Python application running **NiceGUI**. This tier is accessed by administrators and editors and hosts the complex logic (RBAC, Validation, Form Generation).
 * **Retrieval Tier (Read):** A standard, high-performance web server provided by the company (e.g., Apache). This tier provides applications with high-speed, **read-only** access to the configuration files via standard HTTP GET requests.
 
-### 2.2 Filesystem Separation (Critical Security Requirement)
+### 2.2 Storage Architecture (Filesystem Separation)
 
-The system requires **three separate filesystems** with different access controls:
+The system relies on **three distinct storage volumes (Mount Points)**. While they may reside on the same physical NAS/Storage Appliance, they must be mounted with distinct permissions.
 
-| Filesystem | Purpose | Access | Contents |
-| :--- | :--- | :--- | :--- |
-| **Management Filesystem** | Template & Metadata Storage | Management Tier only | Templates (`.yaml`/`.json`), Metadata (`.meta.json`) |
-| **Retrieval Filesystem** | Configuration Output | Management Tier (write), Retrieval Tier (read), Consuming Apps (read via HTTP) | Final configuration files only (`.json`/`.yaml`) |
-| **Audit Filesystem** | Audit Trail & History | Config Administrators only | Complete change history, version snapshots |
+| Volume | Path (Example) | App Permission | Web Svr Permission | Contents |
+| :--- | :--- | :--- | :--- | :--- |
+| **Management Vol** | `/mnt/dccm/mgmt` | Read/Write | None | Templates (`.yaml`/`.json`), Metadata (`.meta.json`), `support_units.json` |
+| **Retrieval Vol** | `/mnt/dccm/public` | Read/Write | Read Only | Final `.json` / `.yaml` configs |
+| **Audit Vol** | `/mnt/dccm/audit` | Append Only | None | History logs |
 
 **Critical Constraints:**
 * Templates and metadata **must never** be accessible via the Retrieval Tier
-* The Retrieval Filesystem must **only** contain final configuration output files
-* Audit trail must be on a completely separate filesystem with admin-only access
-* No cross-contamination between filesystems
+* The Retrieval Volume must **only** contain final configuration output files
+* Audit trail must be on a completely separate volume with admin-only access
+* No cross-contamination between volumes
+* **App Permission "Append Only"** for Audit Volume ensures immutable audit trail
 
 ### 2.3 Architecture Diagram
 
@@ -127,8 +129,8 @@ The system requires **three separate filesystems** with different access control
 │  ┌────────────────────────────────────────────────────────────────────┐ │
 │  │ 4. Persistence & Output Module                                    │ │
 │  │    - Collision detection (owner-based)                            │ │
-│  │    - Write to Retrieval Filesystem                                │ │
-│  │    - Log to Audit Filesystem                                      │ │
+│  │    - Write to Retrieval Volume                                │ │
+│  │    - Log to Audit Volume                                      │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 └──────┬────────────┬────────────┬──────────────────────────────────────────┘
        │            │            │
@@ -187,7 +189,28 @@ The Management Tier ensures data integrity through a sequential, modular process
 
 1.  **Identity & Authorization Module:** Retrieves the user's identity from the **`SSO_USERNAME`** environment variable and checks permissions against the saved Owner/Delegated Access List.
 2.  **Data Integrity Validation Module:** Performs type checking, schema validation (`min`/`max`/`regex`), and resolves external **`lookup_file`** data.
-3.  **Persistence & Output Module:** Runs the **Collision Detection** check and writes the final, validated configuration file to the **Retrieval Filesystem**.
+3.  **Persistence & Output Module:** Runs the **Collision Detection** check and writes the final, validated configuration file to the **Retrieval Volume**.
+
+### 2.6 System Bootstrap & Initial Access
+
+To initialize the system from a fresh install (Day 0):
+
+* **Initial Admin:** The environment variable **`DCCM_INITIAL_ADMIN`** must be set (e.g., `DCCM_INITIAL_ADMIN=alice.smith`).
+* **First Login:** When this user logs in, they are automatically granted Config Administrator privileges.
+* **Subsequent Admins:** The Initial Admin adds other administrators via the UI.
+
+**Bootstrap Process:**
+1. On application startup, check if any Config Administrators exist in the system
+2. If no administrators exist AND `DCCM_INITIAL_ADMIN` is set:
+   - Create the first Config Administrator with the specified SSO username
+   - Log bootstrap action to Audit Volume: `"Initial admin created: alice.smith at 2025-11-19T10:00:00Z"`
+3. If no administrators exist AND `DCCM_INITIAL_ADMIN` is NOT set:
+   - Application refuses to start with error: `"FATAL: No administrators exist and DCCM_INITIAL_ADMIN not set"`
+4. After successful bootstrap, `DCCM_INITIAL_ADMIN` can be removed from environment (optional)
+
+**Validation:**
+- If `DCCM_INITIAL_ADMIN` contains invalid characters (not a valid SSO username format), application refuses to start
+- Bootstrap action is idempotent: If admin already exists, skip creation
 
 ---
 
@@ -226,8 +249,8 @@ Access control metadata (Owners, Editors, delegations) must be stored separately
   * Last modified by and timestamp
 * **Metadata Storage Implementation**: Use separate `.meta.json` files alongside each template
   * For template `my-service`, store metadata in `my-service.meta.json`
-  * Store in the **Management Filesystem** alongside templates
-  * **Critical**: Never store in Retrieval Filesystem - metadata must not be accessible via HTTP
+  * Store in the **Management Volume** alongside templates
+  * **Critical**: Never store in Retrieval Volume - metadata must not be accessible via HTTP
 * **Critical Constraint**: Metadata must **never** appear in configuration files served to consuming applications via the Retrieval Tier
 
 ### 3.4 Audit Trail & History
@@ -235,8 +258,8 @@ Access control metadata (Owners, Editors, delegations) must be stored separately
 The system must maintain a complete audit trail for compliance and troubleshooting purposes:
 
 * **Audit Storage Location**:
-  * Must be stored on the **Audit Filesystem** (see section 2.2)
-  * Completely separate from both Management Filesystem and Retrieval Filesystem
+  * Must be stored on the **Audit Volume** (see section 2.2)
+  * Completely separate from both Management Volume and Retrieval Volume
   * Only **Config Administrators** can access audit trail data
   * Not accessible to regular users or via HTTP
 * **Template Change History**:
@@ -322,8 +345,8 @@ When an Owner or Config Administrator updates an existing template:
 * After a template exists, users can create or edit the configuration:
   * **Create New Configuration**: User fills out the form generated from template for the first time
   * **Edit Existing Configuration**: User modifies values in existing configuration
-* The form is dynamically generated based on the current template (read from Management Filesystem)
-* Upon save, the validated configuration file is written to the **Retrieval Filesystem** for consumption by applications
+* The form is dynamically generated based on the current template (read from Management Volume)
+* Upon save, the validated configuration file is written to the **Retrieval Volume** for consumption by applications
 
 ### 5.3 Configuration File Naming & Retrieval
 
@@ -1085,8 +1108,8 @@ When a user opens a configuration for editing:
 **Implementation Notes:**
 
 **Lock File Location:**
-- Store in Management Filesystem: `management_fs/.locks/[template-name].lock`
-- Do NOT store in Retrieval Filesystem (locks are internal metadata)
+- Store in Management Volume: `management_fs/.locks/[template-name].lock`
+- Do NOT store in Retrieval Volume (locks are internal metadata)
 
 **Lock File Content:**
 ```json
@@ -1160,7 +1183,7 @@ When a user tries to open a locked configuration:
 
 #### 10.3.1 File System Failures
 
-**Scenario:** The Management Filesystem becomes unavailable (NFS mount fails, disk full, permissions issue).
+**Scenario:** The Management Volume becomes unavailable (NFS mount fails, disk full, permissions issue).
 
 **Requirements:**
 - Display clear error message: "System error: Unable to access template storage. Contact administrator."
