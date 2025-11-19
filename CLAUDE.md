@@ -68,8 +68,9 @@ Access control is based on `SSO_USERNAME` environment variable:
   - System must validate and reject non-compliant names
 - Users select the desired output format (JSON or YAML)
 - File extension is automatically added based on selected format
-- Before save, check shared filesystem for name collision
-- If collision exists, prompt user to confirm overwrite
+- Before save, check shared filesystem for name collision:
+  - If user is the Owner of existing file: Allow overwrite (update operation)
+  - If user is NOT the Owner: Reject save and require different name
 - Final files are served at predictable URLs: `http://[config-host]/[free-text-name].[json|yaml]`
 
 ## Template Structure Example

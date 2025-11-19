@@ -59,7 +59,9 @@ The system uses an efficient, owner-centric model based on the user's **`SSO_USE
   * No spaces or special characters that require URL encoding (avoids `%20` in curl requests)
   * The system must validate input and reject non-compliant names
 * **File Format:** The user specifies the desired output format (JSON or YAML). The file extension is automatically added based on the selected format.
-* **Collision Handling:** The NiceGUI application runs a check against the Shared Filesystem. If a file with the same name exists, the user is prompted to confirm **overwrite**.
+* **Collision Handling:** The NiceGUI application runs a check against the Shared Filesystem. If a file with the same name exists:
+  * **If the user is the Owner** of the existing file: Allow overwrite (update operation)
+  * **If the user is NOT the Owner**: Reject the save operation and require the user to choose a different name
 * **Retrieval:** Consuming applications fetch the file directly by name from the Static Web Server: `http://[config-host]/[free-text-name].[json|yaml]`.
 
 ---
