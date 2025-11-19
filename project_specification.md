@@ -18,18 +18,34 @@ The system utilizes a two-tier architecture for optimal performance:
 
 The system is split into two functionally distinct, loosely coupled components that interact via a **Shared Filesystem**.
 
-### 2.1 Component Separation 
+### 2.1 Component Separation
 
 * **Management Tier (Write):** A single Python application running **NiceGUI**. This tier is accessed by administrators and editors and hosts the complex logic (RBAC, Validation, Form Generation).
 * **Retrieval Tier (Read):** A standard, high-performance web server provided by the company (e.g., Apache). This tier provides applications with high-speed, **read-only** access to the configuration files via standard HTTP GET requests.
 
-### 2.2 Simplified Internal Architecture (Management Flow)
+### 2.2 Filesystem Separation (Critical Security Requirement)
+
+The system requires **three separate filesystems** with different access controls:
+
+| Filesystem | Purpose | Access | Contents |
+| :--- | :--- | :--- | :--- |
+| **Management Filesystem** | Template & Metadata Storage | Management Tier only | Templates (`.yaml`/`.json`), Metadata (`.meta.json`) |
+| **Retrieval Filesystem** | Configuration Output | Management Tier (write), Retrieval Tier (read), Consuming Apps (read via HTTP) | Final configuration files only (`.json`/`.yaml`) |
+| **Audit Filesystem** | Audit Trail & History | Config Administrators only | Complete change history, version snapshots |
+
+**Critical Constraints:**
+* Templates and metadata **must never** be accessible via the Retrieval Tier
+* The Retrieval Filesystem must **only** contain final configuration output files
+* Audit trail must be on a completely separate filesystem with admin-only access
+* No cross-contamination between filesystems
+
+### 2.3 Simplified Internal Architecture (Management Flow)
 
 The Management Tier ensures data integrity through a sequential, modular process upon form submission:
 
 1.  **Identity & Authorization Module:** Retrieves the user's identity from the **`SSO_USERNAME`** environment variable and checks permissions against the saved Owner/Delegated Access List.
 2.  **Data Integrity Validation Module:** Performs type checking, schema validation (`min`/`max`/`regex`), and resolves external **`lookup_file`** data.
-3.  **Persistence & Output Module:** Runs the **Collision Detection** check and writes the final, validated configuration file to the **Shared Filesystem**.
+3.  **Persistence & Output Module:** Runs the **Collision Detection** check and writes the final, validated configuration file to the **Retrieval Filesystem**.
 
 ---
 
@@ -68,8 +84,8 @@ Access control metadata (Owners, Editors, delegations) must be stored separately
   * Last modified by and timestamp
 * **Metadata Storage Implementation**: Use separate `.meta.json` files alongside each template
   * For template `my-service`, store metadata in `my-service.meta.json`
-  * Store in the same directory as templates (Management Tier filesystem)
-  * **Not** in the shared filesystem accessible to the Retrieval Tier
+  * Store in the **Management Filesystem** alongside templates
+  * **Critical**: Never store in Retrieval Filesystem - metadata must not be accessible via HTTP
 * **Critical Constraint**: Metadata must **never** appear in configuration files served to consuming applications via the Retrieval Tier
 
 ### 3.4 Audit Trail & History
@@ -77,9 +93,10 @@ Access control metadata (Owners, Editors, delegations) must be stored separately
 The system must maintain a complete audit trail for compliance and troubleshooting purposes:
 
 * **Audit Storage Location**:
-  * Must be stored on a **separate filesystem** not accessible to regular users
+  * Must be stored on the **Audit Filesystem** (see section 2.2)
+  * Completely separate from both Management Filesystem and Retrieval Filesystem
   * Only **Config Administrators** can access audit trail data
-  * Must be separate from the shared filesystem used for configuration retrieval
+  * Not accessible to regular users or via HTTP
 * **Template Change History**:
   * Every template upload/update must create a versioned history entry
   * Store: full template content, uploader username, timestamp, change description (optional)
@@ -163,8 +180,8 @@ When an Owner or Config Administrator updates an existing template:
 * After a template exists, users can create or edit the configuration:
   * **Create New Configuration**: User fills out the form generated from template for the first time
   * **Edit Existing Configuration**: User modifies values in existing configuration
-* The form is dynamically generated based on the current template
-* Upon save, the validated configuration file is written to the shared filesystem (Retrieval Tier)
+* The form is dynamically generated based on the current template (read from Management Filesystem)
+* Upon save, the validated configuration file is written to the **Retrieval Filesystem** for consumption by applications
 
 ### 5.3 Configuration File Naming & Retrieval
 

@@ -22,11 +22,17 @@ When working in this repository:
 
 ### Two-Tier Model
 
-The system consists of two loosely coupled components communicating via a shared filesystem:
+The system consists of two loosely coupled components with **three separate filesystems**:
 
-1. **Management Tier (NiceGUI/Python)**: Handles write operations, complex validation, RBAC, and dynamic form generation. Accessed by administrators and editors.
+**Filesystems:**
+1. **Management Filesystem**: Templates + metadata (`.meta.json`) - Management Tier only
+2. **Retrieval Filesystem**: Final config output - served via HTTP to consuming apps
+3. **Audit Filesystem**: Complete change history - Config Administrators only
 
-2. **Retrieval Tier (Company Web Server)**: Serves validated configuration files as static content via HTTP GET using the company's standard web server solution. Accessed by consuming applications at `http://[config-host]/[filename].[json|yaml]`.
+**Tiers:**
+1. **Management Tier (NiceGUI/Python)**: Reads/writes Management Filesystem, writes to Retrieval Filesystem. Handles validation, RBAC, form generation.
+
+2. **Retrieval Tier (Company Web Server)**: Serves files from Retrieval Filesystem only via HTTP GET at `http://[config-host]/[filename].[json|yaml]`.
 
 ### Management Flow (Sequential Processing)
 
@@ -163,12 +169,19 @@ Owner and delegation information must be stored separately from the output confi
 ### Audit Trail & History
 
 Complete audit trail required for compliance:
-- **Separate filesystem**: Not accessible to regular users, admin-only
+- **Audit Filesystem**: Completely separate from Management and Retrieval filesystems, admin-only access
 - **Template history**: Every upload/update logged with full content, user, timestamp
 - **Configuration history**: Every value change logged with before/after state
 - **Restore capability**: Config Administrators can restore any previous version
 - **Access control**: Only Config Administrators can view/restore from audit trail
 - Audit trail supports filtering by template name, username, date range
+
+### Critical Filesystem Separation
+
+- **Management Filesystem**: Templates and `.meta.json` files - never exposed via HTTP
+- **Retrieval Filesystem**: Only final config output - served to consuming apps
+- **Audit Filesystem**: Change history only - admin access only
+- No cross-contamination between filesystems
 
 ### Lookup File Processing
 
