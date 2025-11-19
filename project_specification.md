@@ -213,24 +213,42 @@ The UI must support these distinct operations:
 
 The core logic is the recursive parser that allows configuration structure and validation to be defined entirely within the JSON or YAML template.
 
-### 6.1 Validation Strategy
+### 6.1 Form Field Types & Validation Strategy
 
-**Default Behavior: No Validation (Free Text)**
-- By default, all fields render as free text input fields with **no validation**
-- The Owner decides what validation (if any) to apply when creating the template
+**Supported Field Types:**
 
-The form generation supports two optional validation strategies:
+The system supports the following input field types, determined by template configuration:
 
-1.  **Type Inference:** Automatically renders basic input fields (e.g., Number Input for an integer value) based on the template's initial value.
-2.  **Explicit Schema Rules (Optional):** The Owner can add specific keywords to enable validation and advanced input features:
+| Field Type | When Used | UI Component | Example Use Case |
+| :--- | :--- | :--- | :--- |
+| **Text Input** | Default (no keywords) or `value` is string | Single-line text field | Service name, description |
+| **Number Input** | `value` is numeric or `type_check: 'integer'` | Numeric input with validation | Timeout, port number, retry count |
+| **Text Area** | `multiline: true` | Multi-line text input | Long descriptions, JSON snippets |
+| **Dropdown (Standard)** | `options` provided (< 10 items) | Standard dropdown | Region selection (3-5 choices) |
+| **Dropdown (Searchable)** | `options` provided (≥ 10 items) OR `lookup_file` | Searchable/autocomplete dropdown | Instance selection (hundreds of choices) |
+| **Multi-Select** | `multi_select: true` with `options` or `lookup_file` | Multi-select dropdown | Multiple teams, tags |
+| **Checkbox** | `type: 'boolean'` or `value` is boolean | Checkbox | Enable/disable feature flags |
+
+**Field Type Selection Logic:**
+1. **Explicit type**: If `type` keyword is present, use it (e.g., `type: 'boolean'`)
+2. **Type inference**: Infer from `value` (string → text, number → number input, boolean → checkbox)
+3. **Dropdown mode**: If `options` or `lookup_file` present, render as dropdown
+   - If `options` has ≥ 10 items OR `lookup_file` is used → **searchable dropdown**
+   - If `options` has < 10 items → **standard dropdown**
+4. **Default**: Text input
+
+**Schema Keywords:**
 
 | Schema Key | Functionality / NiceGUI Component | Purpose |
 | :--- | :--- | :--- |
+| `type` | **Explicit Type Declaration** | Forces specific field type: `'text'`, `'number'`, `'boolean'`, `'textarea'`. Overrides type inference. |
 | `label` | **Form Field Label** | Human-readable label displayed in the form. If omitted, the field key name is used as the label. |
 | `description` | **Help Text** | Optional description/tooltip text displayed below or next to the field to guide users. |
+| `value` | **Default/Initial Value** | Initial value for the field. Used for type inference if `type` not specified. |
+| `multiline` | **Multi-line Text** | When `true`, renders a text area instead of single-line text input. |
 | `min` / `max` / `regex` | **Range & Pattern Checking** | Enforces strict data format and boundary rules. |
-| `options` | **Predefined Dropdown** | Renders a standard dropdown from an explicit list of allowed values. |
-| `lookup_file` | **Searchable Dropdown (Single or Multi-Select)** | Reads an **external local .txt file** to populate dropdown options. File format: one value per line, or delimited columns. |
+| `options` | **Predefined Dropdown** | Renders dropdown from explicit list. Searchable if ≥ 10 items. |
+| `lookup_file` | **Searchable Dropdown** | Reads **external local .txt file** to populate searchable dropdown. Ideal for hundreds of choices. |
 | `separator` | **File Column Delimiter** | Used with `lookup_file`. Defines the delimiter character (e.g., `;`, `,`, `\t`). Must be used together with `column`. |
 | `column` | **Column Index** | Used with `lookup_file` and `separator`. Specifies which column to use for dropdown values (0-indexed). Default: `0` (first column). |
 | `multi_select` | **Enable Multi-Select** | Used with `lookup_file` or `options`. When `true`, allows selecting multiple values. |
@@ -286,8 +304,9 @@ debug_log_level:
   regex: '^(INFO|WARN|DEBUG|ERROR)$'
 
 # ----------------------------------------------------
-# 2. Predefined Strings (Dropdowns)
+# 2. Predefined Strings (Standard Dropdown)
 # ----------------------------------------------------
+# Use case: Few choices (< 10) - standard dropdown
 region_deployment:
   label: "Deployment Region"
   description: "AWS region where this service will be deployed"
@@ -295,14 +314,39 @@ region_deployment:
     - US-EAST-1
     - EU-CENTRAL-1
     - ASIA-SOUTHEAST-2
+  # Only 3 options - rendered as standard dropdown
+
+# ----------------------------------------------------
+# 2b. Boolean / Checkbox
+# ----------------------------------------------------
+enable_debug_mode:
+  label: "Enable Debug Mode"
+  description: "Enable verbose logging for troubleshooting"
+  type: boolean
+  value: false
+  # Rendered as checkbox
+
+# ----------------------------------------------------
+# 2c. Multi-line Text Area
+# ----------------------------------------------------
+custom_config:
+  label: "Custom Configuration"
+  description: "Additional JSON configuration (optional)"
+  type: textarea
+  multiline: true
+  value: ""
+  # Rendered as multi-line text area
 
 # ----------------------------------------------------
 # 3. External File Lookup (Searchable Dropdown)
 # ----------------------------------------------------
+# Use case: Hundreds of instances - searchable dropdown is essential
 file_instance:
   label: "Instance Selection"
   description: "Select the target instance from available instances"
   lookup_file: /etc/config/available_instances.txt
+  # File contains hundreds of lines - automatically rendered as SEARCHABLE dropdown
+  # User can type to filter/search through options
 
 # ----------------------------------------------------
 # 4. Multi-Select with Delimited File

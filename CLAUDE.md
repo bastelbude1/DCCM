@@ -48,19 +48,32 @@ When a configuration is submitted through the generated form:
 
 The form generation engine is the heart of DCCM. It uses recursive parsing to convert YAML/JSON templates into validated input forms.
 
-**Default Behavior: Free Text (No Validation)**
-- By default, fields with no validation keywords render as free text inputs
-- Owners decide what validation (if any) to apply in their templates
-- Validation is completely optional
+**Supported Field Types:**
+1. **Text Input**: Single-line text (default)
+2. **Number Input**: Numeric values with validation
+3. **Text Area**: Multi-line text (`multiline: true`)
+4. **Checkbox**: Boolean values (`type: boolean`)
+5. **Dropdown (Standard)**: Few choices (< 10 items) via `options`
+6. **Dropdown (Searchable)**: Many choices (≥ 10 items in `options` OR `lookup_file`)
+7. **Multi-Select**: Multiple values via `multi_select: true`
 
-**Type Inference**: Automatically renders appropriate inputs based on initial values (e.g., number input for integers)
+**Key Feature - Searchable Dropdowns for Scale:**
+- `lookup_file` always renders as searchable/autocomplete dropdown
+- Ideal for hundreds of choices (e.g., instance selection)
+- User can type to filter/search through options
+- `options` with ≥ 10 items also becomes searchable
+
+**Type Inference**: Automatically renders appropriate inputs based on initial values (e.g., number input for integers, checkbox for booleans)
 
 **Explicit Schema Rules (Optional)**: Recognized keywords that Owners can use to control form generation and validation:
 
+- `type`: Explicit type declaration (`'text'`, `'number'`, `'boolean'`, `'textarea'`)
 - `label`: Human-readable label displayed in form (if omitted, field key name is used)
 - `description`: Optional help text/tooltip displayed below or next to field
+- `value`: Default/initial value (used for type inference if `type` not specified)
+- `multiline`: When `true`, renders text area instead of single-line input
 - `min` / `max` / `regex`: Range and pattern enforcement
-- `options`: Renders standard dropdown from explicit list
+- `options`: Renders dropdown from explicit list (searchable if ≥ 10 items)
 - `lookup_file`: Renders searchable dropdown populated from external local .txt file. Supports one value per line, or multiple columns with delimiter.
 - `separator`: Defines delimiter character for delimited files (e.g., `;`, `,`, `\t`). Used with `lookup_file` and `column`.
 - `column`: Specifies which column to use for dropdown values (0-indexed). Default: `0` (first column). Used with `lookup_file` and `separator`.
