@@ -48,7 +48,9 @@ The form generation engine is the heart of DCCM. It uses recursive parsing to co
 
 - `min` / `max` / `regex`: Range and pattern enforcement
 - `options`: Renders standard dropdown from explicit list
-- `lookup_file`: Renders searchable dropdown populated from external local .txt file. Supports one value per line, or multiple columns with separator (e.g., comma, tab) where first column is used as values.
+- `lookup_file`: Renders searchable dropdown populated from external local .txt file. Supports one value per line, or multiple columns with delimiter (first column used as values).
+- `separator`: Defines delimiter character for delimited files (e.g., `;`, `,`, `\t`). Used with `lookup_file`.
+- `multi_select`: When `true`, enables multi-select mode for `lookup_file` or `options` dropdowns.
 
 ### Owner-Centric RBAC
 
@@ -113,16 +115,18 @@ region_deployment:
     - EU-CENTRAL-1
     - ASIA-SOUTHEAST-2
 
-# External file lookup (searchable dropdown)
+# External file lookup (single-select searchable dropdown)
 file_instance:
   lookup_file: /etc/config/available_instances.txt
   # Reads local .txt file: one value per line or columns with separator
 
-# Metadata (not rendered in form)
-owner:
-  value: user_sso_name
+# External file lookup with multi-select and delimiter
 support_units:
   lookup_file: /etc/config/support_groups.txt
+  separator: ";"
+  multi_select: true
+  # File contains: SU_NAME;LOGIN_NAME (only first column shown)
+
 ```
 
 ## Key Implementation Considerations
@@ -150,8 +154,16 @@ When encountering `lookup_file` directives:
 - Only local .txt files are supported
 - Read the specified file line-by-line
 - File format options:
-  - Simple: One value per line (entire line becomes the option)
-  - Delimited: Multiple columns with separator (comma, tab, etc.) - first column used as dropdown value
+  - **Simple**: One value per line (entire line becomes the option)
+  - **Delimited**: Multiple columns with `separator` character - only first column used as dropdown value
+- Separator support:
+  - Use `separator` keyword to define delimiter (e.g., `;`, `,`, `\t`)
+  - Parse each line, extract first column before delimiter
+  - Example: `IT-Support;john.doe` with `;` separator → shows only `IT-Support`
+- Multi-select support:
+  - Use `multi_select: true` to enable multiple value selection
+  - Works with both `lookup_file` and `options`
+  - Output is array of selected values
 - Handle file read errors gracefully
 - Cache file contents if performance becomes an issue
 

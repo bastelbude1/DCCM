@@ -98,7 +98,9 @@ The form generation and validation rely on two strategies:
 | :--- | :--- | :--- |
 | `min` / `max` / `regex` | **Range & Pattern Checking** | Enforces strict data format and boundary rules. |
 | `options` | **Predefined Dropdown** | Renders a standard dropdown from an explicit list of allowed values. |
-| `lookup_file` | **Searchable Dropdown** | Reads an **external local .txt file** to populate dropdown options. File format: plain text, one value per line. Optional: supports multiple columns with separator (e.g., comma, tab) - first column used as values. |
+| `lookup_file` | **Searchable Dropdown (Single or Multi-Select)** | Reads an **external local .txt file** to populate dropdown options. File format: one value per line, or delimited columns (first column used). |
+| `separator` | **File Column Delimiter** | Used with `lookup_file`. Defines the delimiter character (e.g., `;`, `,`, `\t`). First column becomes dropdown values. |
+| `multi_select` | **Enable Multi-Select** | Used with `lookup_file` or `options`. When `true`, allows selecting multiple values. |
 
 ---
 
@@ -161,15 +163,17 @@ file_instance:
   # Format: One value per line, or multiple columns with separator (first column used)
 
 # ----------------------------------------------------
-# 4. Owner & Support Unit Delegation (Metadata)
+# 4. Multi-Select with Delimited File (Metadata Example)
 # ----------------------------------------------------
-# These fields are NOT rendered in the user form, but are required 
-# by the NiceGUI application logic before saving the final config.
-owner:
-  value: user_sso_name
+# Example: File contains "SU_NAME;LOGIN_NAME" format
 support_units:
   lookup_file: /etc/config/support_groups.txt
-  # Populates a multi-select dropdown for delegation
+  separator: ";"
+  multi_select: true
+  # File format example:
+  # IT-Support;john.doe
+  # DevOps-Team;jane.smith
+  # Only first column (SU_NAME) is shown in dropdown, multiple selections allowed
 ```
 
 ## 2\. Dynamic UI Generation and Validation
@@ -181,7 +185,8 @@ When an Administrator uploads the template above, the **NiceGUI Management Tier*
 | `service_timeout_ms` | **Number Input Field** | **Inference:** Forces integer input.<br>**Explicit:** Input must be between 1,000 and 15,000. |
 | `debug_log_level` | **Text Input Field** | **Explicit (Regex):** Input string must be `INFO`, `WARN`, `DEBUG`, or `ERROR`. |
 | `region_deployment` | **Standard Dropdown** | **Explicit (Options):** User can only select from the three predefined regions. |
-| `file_instance` | **Searchable Dropdown** | **Explicit (Lookup):** Populated dynamically from local .txt file. Supports one value per line or multiple columns with separator. |
+| `file_instance` | **Searchable Dropdown (Single)** | **Explicit (Lookup):** Populated dynamically from local .txt file. |
+| `support_units` | **Multi-Select Dropdown** | **Explicit (Lookup + Multi):** Reads delimited file with `;` separator, displays first column only, allows multiple selections. |
 
 ## 3\. The Final Saved Configuration (Output)
 
